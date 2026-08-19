@@ -11,10 +11,20 @@ const {
   listConversationsForChatbot,
   getMessagesForConversation,
 } = require('../services/conversations');
+const settings = require('../services/settings');
+const { fetchPageText } = require('../scraper');
 
 const router = express.Router();
 
 router.use(require('../middleware/adminAuth'));
+
+router.get('/settings', (req, res) => {
+  res.json(settings.getSettings());
+});
+
+router.put('/settings', (req, res) => {
+  res.json(settings.updateSettings(req.body || {}));
+});
 
 router.get('/chatbots', (req, res) => {
   res.json({ chatbots: listChatbots() });
@@ -63,5 +73,23 @@ router.get('/conversations/:conversationId/messages', (req, res) => {
   }
   res.json(result);
 });
+
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+router.post(
+  '/chatbots/:chatbotId/scrape',
+  asyncHandler(async (req, res) => {
+    const chatbot = getChatbotAdmin(req.params.chatbotId);
+    if (!chatbot) {
+      throw new AppError(404, 'CHATBOT_NOT_FOUND', 'Chatbot not found.');
+    }
+    const url = (req.body && req.body.url) || chatbot.websiteUrl;
+    if (!url) {
+      throw new AppError(400, 'SCRAPE_FAILED', 'No URL provided. Set a website URL or pass one.');
+    }
+    const text = await fetchPageText(url);
+    res.json({ text });
+  })
+);
 
 module.exports = router;

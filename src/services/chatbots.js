@@ -1,5 +1,4 @@
 const { getDb } = require('../db');
-const { encryptKey } = require('../crypto');
 const { generateId } = require('../ids');
 const { AppError } = require('../errors');
 
@@ -15,17 +14,50 @@ const DEFAULTS = {
   businessFacts: '',
 };
 
+const FACTS_KEYS = ['hours', 'contact', 'faq', 'products', 'misc'];
+
 const FIELD_MAP = {
   name: 'name',
   websiteUrl: 'website_url',
   welcomeMessage: 'welcome_message',
   brandColor: 'brand_color',
-  businessFacts: 'business_facts',
   model: 'model',
   baseUrl: 'base_url',
   temperature: 'temperature',
   maxTokens: 'max_tokens',
 };
+
+function parseFacts(json) {
+  const base = { hours: '', contact: '', faq: '', products: '', misc: '' };
+  if (!json) return base;
+  try {
+    return { ...base, ...(JSON.parse(json) || {}) };
+  } catch (e) {
+    return base;
+  }
+}
+
+function normalizeFacts(facts) {
+  const out = {};
+  for (const key of FACTS_KEYS) {
+    out[key] = typeof facts[key] === 'string' ? facts[key] : '';
+  }
+  return out;
+}
+
+function assembleFacts(facts) {
+  const sections = [
+    ['Business hours', facts.hours],
+    ['Contact', facts.contact],
+    ['FAQ', facts.faq],
+    ['Products and services', facts.products],
+    ['Additional information', facts.misc],
+  ];
+  return sections
+    .filter(([, v]) => typeof v === 'string' && v.trim() !== '')
+    .map(([h, v]) => `${h}:\n${v.trim()}`)
+    .join('\n\n');
+}
 
 function getChatbotById(id) {
   return getDb().prepare('SELECT * FROM chatbots WHERE id = ?').get(id) || null;
@@ -50,14 +82,13 @@ function serializeAdmin(row) {
     websiteUrl: row.website_url,
     welcomeMessage: row.welcome_message,
     brandColor: row.brand_color,
-    businessFacts: row.business_facts,
+    businessFacts: row.business_facts || '',
+    facts: parseFacts(row.facts_json),
     model: row.model,
     baseUrl: row.base_url,
     temperature: row.temperature,
     maxTokens: row.max_tokens,
     enabled: !!row.enabled,
-    hasApiKey: !!row.api_key_encrypted,
-    apiKeyHint: row.api_key_hint || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -66,6 +97,7 @@ function serializeAdmin(row) {
 function serializeList(row) {
   const serialized = serializeAdmin(row);
   delete serialized.businessFacts;
+  delete serialized.facts;
   return serialized;
 }
 
@@ -83,13 +115,17 @@ function createChatbot(input) {
   if (typeof input.name !== 'string' || input.name.trim() === '') {
     throw new AppError(400, 'VALIDATION', 'name is required.');
   }
-  if (typeof input.apiKey !== 'string' || input.apiKey.trim() === '') {
-    throw new AppError(400, 'VALIDATION', 'apiKey is required.');
-  }
 
-  const { encrypted, hint } = encryptKey(input.apiKey);
   const now = new Date().toISOString();
   const id = generateId('ch');
+
+  let businessFacts = input.businessFacts || DEFAULTS.businessFacts;
+  let factsJson = null;
+  if (input.facts && typeof input.facts === 'object') {
+    const facts = normalizeFacts(input.facts);
+    factsJson = JSON.stringify(facts);
+    businessFacts = assembleFacts(facts);
+  }
 
   const row = {
     id,
@@ -97,11 +133,10 @@ function createChatbot(input) {
     website_url: input.websiteUrl || DEFAULTS.websiteUrl,
     welcome_message: input.welcomeMessage || DEFAULTS.welcomeMessage,
     brand_color: input.brandColor || DEFAULTS.brandColor,
-    business_facts: input.businessFacts || DEFAULTS.businessFacts,
+    business_facts: businessFacts,
+    facts_json: factsJson,
     model: input.model || DEFAULTS.model,
     base_url: input.baseUrl || DEFAULTS.baseUrl,
-    api_key_encrypted: encrypted,
-    api_key_hint: hint,
     temperature: input.temperature !== undefined ? input.temperature : DEFAULTS.temperature,
     max_tokens: input.maxTokens !== undefined ? input.maxTokens : DEFAULTS.maxTokens,
     enabled: DEFAULTS.enabled,
@@ -111,7 +146,7 @@ function createChatbot(input) {
 
   getDb()
     .prepare(
-      'INSERT INTO chatbots (id, name, website_url, welcome_message, brand_color, business_facts, model, base_url, api_key_encrypted, api_key_hint, temperature, max_tokens, enabled, created_at, updated_at) VALUES (@id, @name, @website_url, @welcome_message, @brand_color, @business_facts, @model, @base_url, @api_key_encrypted, @api_key_hint, @temperature, @max_tokens, @enabled, @created_at, @updated_at)'
+      'INSERT INTO chatbots (id, name, website_url, welcome_message, brand_color, business_facts, facts_json, model, base_url, temperature, max_tokens, enabled, created_at, updated_at) VALUES (@id, @name, @website_url, @welcome_message, @brand_color, @business_facts, @facts_json, @model, @base_url, @temperature, @max_tokens, @enabled, @created_at, @updated_at)'
     )
     .run(row);
 
@@ -137,10 +172,13 @@ function updateChatbot(id, input) {
     values.push(input.enabled ? 1 : 0);
   }
 
-  if (typeof input.apiKey === 'string' && input.apiKey.trim() !== '') {
-    const { encrypted, hint } = encryptKey(input.apiKey);
-    sets.push('api_key_encrypted = ?', 'api_key_hint = ?');
-    values.push(encrypted, hint);
+  if (input.facts && typeof input.facts === 'object') {
+    const facts = normalizeFacts(input.facts);
+    sets.push('facts_json = ?', 'business_facts = ?');
+    values.push(JSON.stringify(facts), assembleFacts(facts));
+  } else if (Object.prototype.hasOwnProperty.call(input, 'businessFacts')) {
+    sets.push('business_facts = ?', 'facts_json = ?');
+    values.push(input.businessFacts, null);
   }
 
   sets.push('updated_at = ?');

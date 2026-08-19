@@ -6,7 +6,7 @@ You are working on the **SiteLift Chatbots** project: a self-hosted platform for
 
 ## Project in one paragraph
 
-A website owner embeds a small vanilla-JS widget on their site. It floats a chat bubble bottom-right. Visitor messages go to the SiteLift server, which looks up the chatbot's config (system prompt + encrypted API key), forwards to an OpenAI-compatible `/v1/chat/completions` endpoint, and returns the reply. Everything is stored in SQLite. The admin manages all chatbots from a single dashboard page.
+A website owner embeds a small vanilla-JS widget on their site. It floats a chat bubble bottom-right. Visitor messages go to the SiteLift server, which looks up the chatbot's config (business facts), forwards to an OpenAI-compatible `/v1/chat/completions` endpoint using a single global API key, and returns the reply. Everything is stored in SQLite. The admin manages all chatbots from a single dashboard page.
 
 ## Documentation (table of contents)
 
@@ -14,7 +14,7 @@ A website owner embeds a small vanilla-JS widget on their site. It floats a chat
 | --- | --- | --- |
 | [`README.md`](README.md) | High-level overview, design principles, quick start, doc index | ✅ done |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **Implementation spec.** End-to-end flow, components, request lifecycle, key decisions, open questions, non-goals | ✅ done |
-| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | SQLite schema: `chatbots`, `conversations`, `messages`; context window | ✅ done |
+| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | SQLite schema: `chatbots`, `settings`, `conversations`, `messages`; context window | ✅ done |
 | [`docs/EMBED.md`](docs/EMBED.md) | Widget install guide, `data-*` attributes, visitor identity | ✅ done |
 | [`docs/API.md`](docs/API.md) | Full REST API reference (embed, public chat, admin) | ✅ done |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | API key encryption, threat model, deployment hardening | ✅ done |
@@ -22,9 +22,9 @@ A website owner embeds a small vanilla-JS widget on their site. It floats a chat
 ## Key architecture decisions (settled)
 
 - **Stack:** Node.js + Express + SQLite backend; vanilla-JS widget and single-page admin UI. No front-end framework, no build step for the client.
-- **Data model:** one global admin, no auth by default; optional `ADMIN_TOKEN`. Tables: `chatbots`, `conversations`, `messages`.
-- **AI keys:** each chatbot stores its own key, **AES-256-GCM encrypted** server-side. Never sent to browser/widget; redacted in all admin responses.
-- **Knowledge:** `business_facts` on the chatbot becomes the system prompt. Plain English, no retrieval.
+- **Data model:** one global admin, no auth by default; optional `ADMIN_TOKEN`. Tables: `chatbots`, `conversations`, `messages`, `settings`.
+- **AI key:** one **global** OpenAI-compatible key shared by all chatbots, **AES-256-GCM encrypted** at rest in the `settings` table (set in Admin → Settings) with `OPENAI_API_KEY`/`OPENAI_BASE_URL` env fallback. Never sent to browser/widget; only a 4-char hint is ever returned.
+- **Knowledge:** `business_facts` on the chatbot becomes the system prompt. Stored as structured `facts` (`hours`, `contact`, `faq`, `products`, `misc`) that the server assembles into the prompt; a one-time admin-only scrape-to-draft import pulls text from the target site (no runtime retrieval).
 - **Provider contract:** any OpenAI-compatible `POST /v1/chat/completions` endpoint.
 - **Context window (v1):** last 20 messages per conversation sent to the provider each turn.
 - **Abuse prevention (v1):** 20-message cap + 2000-char message limit + ~20 msgs/min per-visitor rate limit (in-memory, keyed by visitorId).
@@ -40,7 +40,7 @@ Tracked in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5. Highlights:
 
 1. Exact rate-limit numbers (start with ~20 msgs/min, 2000 chars; tune after real traffic).
 2. Whether `visitorId` should rotate after N days of inactivity.
-3. Final Docker image base, volume layout, and reverse-proxy example (written during implementation in `docs/DEPLOYMENT.md`).
+3. ~~Final Docker image base, volume layout, and reverse-proxy example~~ — **settled**, documented in `docs/DEPLOYMENT.md`.
 
 ## Working rules for AI assistants
 

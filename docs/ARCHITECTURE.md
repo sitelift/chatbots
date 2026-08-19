@@ -8,7 +8,7 @@ SiteLift Chatbots is a single server with three jobs:
 
 1. **Serve the embed widget** — a small vanilla-JS file (`embed.js`) that target websites load to get a floating chat bubble.
 2. **Proxy chat to an AI provider** — receive visitor messages from the widget, prepend the chatbot's system prompt, call an OpenAI-compatible API, and return the reply.
-3. **Run the admin dashboard** — a single HTML page where the admin creates chatbots, edits system prompts, manages API keys, and reads conversation history.
+3. **Run the admin dashboard** — a single HTML page where the admin creates chatbots, edits system prompts, manages the global AI key, and reads conversation history.
 
 There is **one admin** (a trusted single person) and **many chatbots**, each tied to a different website. The admin owns all of them.
 
@@ -55,7 +55,7 @@ Routes (full reference in [API.md](API.md)):
 | --- | --- | --- |
 | Embed | `GET /embed.js` | none |
 | Public chat | `GET /api/chatbots/:id` · `POST /api/chat/:chatbotId/messages` | none |
-| Admin | `GET/POST /api/admin/chatbots` · `GET/PUT/DELETE /api/admin/chatbots/:id` · `GET /api/admin/chatbots/:id/conversations` · `GET /api/admin/conversations/:id/messages` | optional `ADMIN_TOKEN` |
+| Admin | `GET/POST /api/admin/chatbots` · `GET/PUT/DELETE /api/admin/chatbots/:id` · `GET /api/admin/chatbots/:id/conversations` · `GET /api/admin/conversations/:id/messages` · `GET/PUT /api/admin/settings` · `POST /api/admin/chatbots/:chatbotId/scrape` | optional `ADMIN_TOKEN` |
 
 ### 2.3 The admin dashboard (`admin.html`)
 
@@ -64,7 +64,8 @@ A single self-contained HTML page served at `/admin`. Uses plain `fetch()` again
 Views:
 
 - **Chatbot list** — table of all chatbots with quick links to conversations.
-- **Chatbot form** — create/edit a chatbot. Fields: name, target website URL, welcome message, brand color, **business facts** (the system prompt body), model, base URL, API key, extra settings (temperature, max tokens).
+- **Chatbot form** — create/edit a chatbot. Fields: name, target website URL, welcome message, brand color, **business facts** (5 labeled textareas — hours, contact, FAQ, products, misc — assembled into the system prompt), model, base URL, extra settings (temperature, max tokens). A one-time **website import** button scrapes the target site into a draft business-facts textarea to review and trim.
+- **Settings** — set the single global AI provider key (base URL optional). Shows only a hint of the key, never the key itself.
 - **Conversation view** — timeline of messages for one visitor thread, read-only.
 
 ### 2.4 The AI provider
@@ -95,6 +96,7 @@ The server builds this request:
 Important design points:
 
 - **The system prompt is exactly the chatbot's "business facts" field.** There is no prompt engineering wrapper around it beyond a short, fixed prefix that instructs the model to be helpful and to say when it does not know. The admin writes plain English business facts.
+- **The API key is global — one key for all chatbots.** It is stored encrypted in the `settings` table and resolved as: `settings.openai_api_key` (decrypted) → `OPENAI_API_KEY` env. The base URL resolves as: chatbot `base_url` → `settings.openai_base_url` → `OPENAI_BASE_URL` env → `https://api.openai.com/v1`. If no key is configured anywhere, chat returns `400 AI_KEY_NOT_CONFIGURED`.
 - **Conversation context** is the full message history stored in SQLite for that conversation, sent back to the provider each turn (within a capped window — see [DATA_MODEL](DATA_MODEL.md) for the history limit).
 - **Streaming is optional.** The simplest v1 is a non-streaming request returning the full reply as JSON. Streaming (SSE) is a later enhancement, not required for the initial build.
 
@@ -136,7 +138,7 @@ Server:
   5. Insert the user message row.
      If the visitor has volunteered a name/email in this message, capture them on the conversation (see §8).
   6. Load recent message history for the conversation (capped at 20 messages).
-  7. Decrypt the chatbot's API key.
+  7. Resolve the global AI key (`settings.openai_api_key` decrypted, else `OPENAI_API_KEY` env) and the base URL (chatbot `base_url` → `settings.openai_base_url` → `OPENAI_BASE_URL` env → default `https://api.openai.com/v1`). No key anywhere → 400 `AI_KEY_NOT_CONFIGURED`.
   8. Call the AI provider:
          POST {baseUrl}/chat/completions   (baseUrl already includes the version path, e.g. https://api.openai.com/v1)
          Authorization: Bearer <decrypted key>
@@ -153,20 +155,24 @@ Widget appends the reply to the panel
 ### 3.3 Admin edits a chatbot
 
 ```
-Admin edits business facts in the dashboard form
+Admin edits business facts (5 labeled textareas) or trims an imported site draft
         │
         ▼
 PUT /api/admin/chatbots/ch_abc123
 body: { name, websiteUrl, welcomeMessage, brandColor,
-        businessFacts, model, baseUrl, apiKey?, temperature, maxTokens }
+        facts?, businessFacts?, model, baseUrl, temperature, maxTokens }
         │
         ▼
 Server:
   1. Validate fields.
-  2. If apiKey provided and different from current: re-encrypt and store.
-     If omitted: keep the existing (encrypted) key unchanged.
-  3. Update the row. Respond 200 with the updated chatbot (API key redacted).
+  2. If structured facts are provided: store them in `facts_json` and assemble
+     `business_facts` from the non-empty sections.
+     If a raw `businessFacts` string is provided instead: store it directly
+     (`facts_json` stays null).
+  3. Update the row. Respond 200 with the updated chatbot.
 ```
+
+No API-key handling happens here — the AI key is global and managed in **Settings** (see §2.3, §2.4).
 
 ## 4. Key design decisions and rationale
 
@@ -176,9 +182,11 @@ Server:
 | Widget language | Vanilla JS, no build | Embedding code must be trivially auditable and have no supply-chain surface. |
 | Admin UI | Single HTML page, no framework | Deliberate simplicity; the whole UI is ~one file. |
 | AI provider contract | OpenAI-compatible `/v1/chat/completions` | Works with OpenAI, OpenRouter, Groq, Ollama, Azure, LM Studio — one code path. |
-| Key handling | Encrypted at rest, server-side only | See [Security](SECURITY.md). |
+| Key handling | Single global AI key in `settings.openai_api_key`, AES-256-GCM encrypted at rest with `ENCRYPTION_KEY`; `OPENAI_API_KEY` env fallback; base URL in `settings.openai_base_url` with env fallback | One key for all chatbots, set once by the admin. See [Security](SECURITY.md). |
 | Auth | None by default + optional `ADMIN_TOKEN` | Single trusted admin; token exists to make public hosting safe enough. |
 | System prompt | Plain-text business facts | The core product promise: "edit a textarea, restart not needed." |
+| Business facts | Structured `facts_json` (`hours`, `contact`, `faq`, `products`, `misc`) assembled into the `business_facts` system prompt; raw `businessFacts` string still accepted | Five labeled textareas are easier to maintain than one free-form block. |
+| Website import | One-time scrape-to-draft, admin-only (`POST /api/admin/chatbots/:id/scrape`) | Extracts readable site text (~20k chars) as a draft the admin trims before saving. Never runs at chat time. |
 | Streaming | Out of scope for v1 | Adds SSE complexity for marginal UX gain at this size. |
 | CORS | Allow all origins for public routes | The widget is loaded on arbitrary target sites and calls back to the API. |
 | Context window | Cap at the last 20 messages per turn | Bounds token use; doubles as abuse prevention against long threads. |
@@ -197,7 +205,8 @@ The core design questions for v1 are now **settled** (see the table in §4 and t
 
 ## 6. Non-goals (explicitly out of scope for v1)
 
-- Vector databases, embeddings, RAG.
+- Vector databases, embeddings, query-time RAG.
+- **Runtime retrieval from the target website** (fetching the site on demand during chat) — out of scope. The only site access is a one-time, admin-only **scrape-to-draft import helper** at setup time: the admin scrapes the site, reviews/trims the extracted text (~20k chars), and saves it into the business facts. It never runs at chat time.
 - Multiple admin accounts or roles.
 - Webhooks, Slack/email integrations, CRM sync.
 - Attachments, voice, or images.
@@ -225,12 +234,3 @@ The widget is **anonymous by default** — visitors are never asked for a name o
 - The admin sees captured name/email in the conversation view in the dashboard.
 
 This keeps the widget frictionless (no forced form) while still capturing leads and driving calls. The exact phrasing lives in the admin-editable business facts, so the admin controls how assertive the bot is.
-
-## 6. Non-goals (explicitly out of scope for v1)
-
-- Vector databases, embeddings, RAG.
-- Multiple admin accounts or roles.
-- Webhooks, Slack/email integrations, CRM sync.
-- Attachments, voice, or images.
-- Hosted SaaS billing or usage limits.
-- A mobile app.

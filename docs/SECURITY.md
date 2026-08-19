@@ -8,12 +8,15 @@ This document covers how SiteLift Chatbots protects secrets, its threat model, a
 
 ## 1. API key handling
 
+There is **one global AI-provider API key** for the whole server, shared by all chatbots — not a per-chatbot key.
+
 ### At rest
 
-- Each chatbot's API key is encrypted with **AES-256-GCM** before being written to SQLite.
+- The key is encrypted with **AES-256-GCM** before being written to SQLite, in the `settings` table under the key `openai_api_key`.
 - The encryption key is the server's `ENCRYPTION_KEY` environment variable (32 bytes, base64), **never committed** (see `.env.example`).
-- Only the encrypted blob (`api_key_encrypted`) and a short hint (`api_key_hint`, last 4 chars) are stored.
+- Only the encrypted blob and a short hint (`hint`, last 4 chars) are stored. An optional `openai_base_url` is stored in plaintext (it is not secret).
 - AES-GCM provides authenticated encryption, so tampered ciphertext is rejected on decryption.
+- **Alternative/fallback:** the key may instead come from the `OPENAI_API_KEY` environment variable. In that case it is a plaintext secret living in the environment / container env, not encrypted at rest in the DB. It is still never exposed via the API.
 
 ### In transit
 
@@ -23,7 +26,7 @@ This document covers how SiteLift Chatbots protects secrets, its threat model, a
 
 ### Never exposed
 
-- The admin API **redacts** the key in every response (only `hasApiKey` + `apiKeyHint`).
+- The admin API **redacts** the key in every response. `GET /api/admin/settings` returns only `hasApiKey` + `apiKeyHint` (last 4 chars); the key itself is never returned.
 - The public chat API and widget **never** have access to it.
 - Error logs must not include the key or the full ciphertext.
 
@@ -36,6 +39,8 @@ This document covers how SiteLift Chatbots protects secrets, its threat model, a
   1. **Bind to localhost + reverse proxy** (recommended): run the server on `127.0.0.1` behind a reverse proxy (Caddy/nginx) that adds authentication, or
   2. **`ADMIN_TOKEN`**: if set, every admin endpoint requires `Authorization: Bearer <ADMIN_TOKEN>` (also accepted as `?token=` for the dashboard page). Unauthenticated admin requests return `401`.
 
+The settings endpoints (`GET`/`PUT /api/admin/settings`) are admin-gated like all other admin routes.
+
 ### Public chat / embed
 
 - Intentionally unauthenticated — the widget runs on arbitrary third-party sites.
@@ -45,15 +50,21 @@ This document covers how SiteLift Chatbots protects secrets, its threat model, a
 
 | Threat | Mitigation |
 | --- | --- |
-| Attacker reads the SQLite DB file | Keys are AES-256-GCM encrypted; without `ENCRYPTION_KEY` they are useless. DB file permissions are restrictive. |
+| Attacker reads the SQLite DB file | The global key is AES-256-GCM encrypted; without `ENCRYPTION_KEY` it is useless. DB file permissions are restrictive. (If `OPENAI_API_KEY` env is used instead of the encrypted settings key, the key lives in the environment / container env, not in the DB.) |
 | Attacker gets `ENCRYPTION_KEY` | Full key compromise — protect it like a password; keep it out of the repo and out of backups alongside the DB. |
-| Attacker reads admin responses | Keys are redacted; only a 4-char hint is exposed. |
+| Attacker reads admin responses | The key is never returned; `GET /api/admin/settings` exposes only `hasApiKey` + a 4-char hint. |
 | Attacker calls the public chat API to spend your AI quota | v1 ships minimal abuse prevention: 20-message context cap, 2000-char message limit, and a ~20 msgs/min per-visitor rate limit (see ARCHITECTURE §7). Still recommend provider-side cost limits. |
 | Attacker guesses/enumerates chatbot ids | Ids are long random strings (unguessable), but are still public once embedded. They are **not** a security boundary — treat them as public identifiers. |
 | Prompt injection via visitor content | The system prompt instructs the model to stay in role and ignore attempts to reveal the system prompt or instructions. (This is a best-effort mitigation; no prompt is foolproof.) |
 | XSS in the widget from AI replies | The widget renders AI text as plain text, never as HTML, and does not use `innerHTML` with model output. Escape all output. |
 | CORS abuse | Public routes allow any origin (required for embedding). Admin routes restrict `Origin` / require the token. |
 | Provider returns errors | Errors are returned as generic `502 AI_PROVIDER_ERROR` to the client; details logged server-side. |
+
+### Website import (`POST /api/admin/chatbots/:chatbotId/scrape`)
+
+- The scrape endpoint is **admin-only** (gated by `ADMIN_TOKEN`), so unauthenticated users cannot reach it.
+- Because it fetches an arbitrary URL server-side, it can be abused for **SSRF** against internal URLs (e.g. `http://127.0.0.1`, cloud metadata endpoints). It accepts any `http(s)` URL.
+- Mitigations: it is already admin-gated by `ADMIN_TOKEN`, and the admin should only import **trusted public sites**. Do not expose the admin surface to the internet without a token (see §2 and §4).
 
 ## 4. Deployment hardening checklist
 

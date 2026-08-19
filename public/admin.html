@@ -40,16 +40,19 @@ body {
   justify-content: space-between;
 }
 .app-title { font-weight: 700; font-size: 17px; }
+.nav { display: flex; gap: 4px; }
 .nav-link {
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--muted);
   font-size: 14px;
   cursor: pointer;
   padding: 6px 10px;
   border-radius: 6px;
+  font-weight: 500;
 }
-.nav-link:hover { background: #eff6ff; }
+.nav-link:hover { background: #eff6ff; color: var(--accent); }
+.nav-link.active { color: var(--accent); background: #eff6ff; }
 .container { max-width: 1040px; margin: 0 auto; padding: 24px 20px 60px; }
 .view { display: block; }
 .view[hidden] { display: none; }
@@ -83,6 +86,7 @@ body {
   text-decoration: none;
 }
 .btn:hover { background: #f8fafc; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent-strong); }
 .btn-danger { color: var(--danger); border-color: #fecaca; background: #fff; }
@@ -119,6 +123,8 @@ body {
 .link { color: var(--accent); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 .empty { color: var(--muted); padding: 24px; text-align: center; }
+.muted { color: var(--muted); }
+.hint { font-size: 12px; margin-top: 4px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .field { display: flex; flex-direction: column; }
 .field.full { grid-column: 1 / -1; }
@@ -140,6 +146,7 @@ body {
 .field textarea { resize: vertical; min-height: 90px; }
 .field input[type="color"] { width: 52px; height: 38px; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: #fff; cursor: pointer; }
 .color-row { display: flex; align-items: center; gap: 8px; }
+.color-row input[type="text"] { flex: 1; min-width: 0; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; }
 .checkbox-row input { width: 16px; height: 16px; }
 .form-error {
@@ -152,6 +159,23 @@ body {
   font-size: 14px;
 }
 .form-actions { display: flex; gap: 10px; margin-top: 20px; }
+.settings-status { padding: 4px 0 6px; }
+.pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pill.set { background: #dcfce7; color: #15803d; }
+.pill.unset { background: #e2e8f0; color: #475569; }
+.import-row { display: flex; gap: 8px; }
+.import-row input { flex: 1; min-width: 0; }
+.import-msg { margin-top: 6px; font-size: 13px; }
+.import-msg.ok { color: #15803d; }
+.import-msg.err { color: #b91c1c; }
+.facts-heading { font-size: 16px; margin: 24px 0 4px; }
+.facts-sub { margin: 0 0 14px; }
 .conv-list { display: flex; flex-direction: column; gap: 10px; }
 .conv-item {
   display: flex;
@@ -191,10 +215,10 @@ body {
 }
 .msg-user .msg-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
 .msg-assistant .msg-bubble { background: #e2e8f0; color: var(--text); border-bottom-left-radius: 4px; }
-.muted { color: var(--muted); }
 @media (max-width: 720px) {
   .form-grid { grid-template-columns: 1fr; }
   .field.full { grid-column: auto; }
+  .topbar-inner { flex-direction: column; align-items: flex-start; gap: 8px; }
 }
 </style>
 </head>
@@ -202,11 +226,37 @@ body {
 <header class="topbar">
   <div class="topbar-inner">
     <span class="app-title">SiteLift Admin</span>
-    <button id="nav-home" class="nav-link" type="button">Chatbots</button>
+    <nav class="nav">
+      <button id="nav-chatbots" class="nav-link active" type="button">Chatbots</button>
+      <button id="nav-settings" class="nav-link" type="button">Settings</button>
+    </nav>
   </div>
 </header>
 <main class="container">
   <div id="banner" class="banner" hidden></div>
+
+  <section id="view-settings" class="view" hidden>
+    <div class="section-head">
+      <h1>Settings</h1>
+    </div>
+    <div class="card">
+      <form id="settings-form">
+        <div class="field full">
+          <label for="s-apiKey">API key</label>
+          <div id="settings-key-status" class="settings-status"></div>
+          <input id="s-apiKey" type="password" autocomplete="new-password" placeholder="Leave blank to keep current">
+        </div>
+        <div class="field full">
+          <label for="s-baseUrl">Base URL</label>
+          <input id="s-baseUrl" type="text" placeholder="https://api.openai.com/v1">
+          <span class="muted hint">The API key is global and shared by all chatbots. Leave the base URL empty to clear it.</span>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </section>
 
   <section id="view-list" class="view">
     <div class="section-head">
@@ -252,11 +302,6 @@ body {
             <input id="f-baseUrl" type="text" placeholder="https://api.openai.com/v1">
           </div>
           <div class="field">
-            <label for="f-apiKey">API key</label>
-            <input id="f-apiKey" type="password" autocomplete="new-password">
-            <span class="muted" id="f-apiKey-hint" style="font-size:12px;margin-top:4px;"></span>
-          </div>
-          <div class="field">
             <label for="f-temp">Temperature</label>
             <input id="f-temp" type="number" step="0.1" min="0" max="2" value="0.7">
           </div>
@@ -264,14 +309,44 @@ body {
             <label for="f-maxTokens">Max tokens</label>
             <input id="f-maxTokens" type="number" step="1" min="1" value="512">
           </div>
-          <div class="field full">
-            <label for="f-facts">Business facts (system prompt)</label>
-            <textarea id="f-facts" placeholder="We sell widgets. Hours: Mon-Fri 9-5. Shipping is free over $50."></textarea>
-          </div>
-          <div class="field full">
+          <div id="f-enabled-wrap" class="field full" hidden>
             <label class="checkbox-row"><input id="f-enabled" type="checkbox" checked> Enabled</label>
           </div>
         </div>
+
+        <h2 class="facts-heading">Business facts</h2>
+        <p class="muted hint facts-sub">These plain-English facts are embedded in the chatbot's system prompt so it can answer visitors about your business.</p>
+        <div class="form-grid">
+          <div class="field full">
+            <label for="f-facts-hours">Business hours</label>
+            <textarea id="f-facts-hours" placeholder="Mon-Fri 9am-5pm, Sat 10am-2pm, closed Sun"></textarea>
+          </div>
+          <div class="field full">
+            <label for="f-facts-contact">Contact</label>
+            <textarea id="f-facts-contact" placeholder="Phone, email, address, booking links..."></textarea>
+          </div>
+          <div class="field full">
+            <label for="f-facts-faq">FAQ</label>
+            <textarea id="f-facts-faq" placeholder="Common questions and answers..."></textarea>
+          </div>
+          <div class="field full">
+            <label for="f-facts-products">Products &amp; services</label>
+            <textarea id="f-facts-products" placeholder="What you sell or offer, pricing, features..."></textarea>
+          </div>
+          <div class="field full">
+            <label for="f-facts-misc">Additional info / Misc</label>
+            <textarea id="f-facts-misc" placeholder="Anything else the chatbot should know about the business"></textarea>
+          </div>
+          <div class="field full">
+            <label for="f-import-url">Import from website</label>
+            <div class="import-row">
+              <input id="f-import-url" type="text" placeholder="https://example.com">
+              <button id="btn-import" class="btn" type="button">Import</button>
+            </div>
+            <div id="import-status" class="import-msg"></div>
+          </div>
+        </div>
+
         <div class="form-actions">
           <button id="btn-save" class="btn btn-primary" type="submit">Save</button>
           <button id="btn-cancel" class="btn" type="button">Cancel</button>
@@ -303,9 +378,9 @@ body {
     </div>
   </section>
 </main>
-
 <script>
 (function () {
+  'use strict';
   var TOKEN_KEY = 'siteliftAdminToken';
   var editingId = null;
   var convChatbotId = null;
@@ -356,7 +431,7 @@ body {
         var data = {};
         try { data = text ? JSON.parse(text) : {}; } catch (e) { data = {}; }
         if (res.status === 401) {
-          var e401 = new Error('Unauthorized \u2014 invalid admin token');
+          var e401 = new Error('Unauthorized - invalid or missing admin token. Re-open the dashboard with a valid ?token= parameter.');
           e401.unauthorized = true;
           throw e401;
         }
@@ -390,6 +465,11 @@ body {
     var views = document.querySelectorAll('.view');
     for (var i = 0; i < views.length; i++) views[i].hidden = true;
     document.getElementById(id).hidden = false;
+    var chatbotsNav = document.getElementById('nav-chatbots');
+    var settingsNav = document.getElementById('nav-settings');
+    var inSettings = id === 'view-settings';
+    settingsNav.className = 'nav-link' + (inSettings ? ' active' : '');
+    chatbotsNav.className = 'nav-link' + (inSettings ? '' : ' active');
   }
 
   function handleToken() {
@@ -397,8 +477,57 @@ body {
     var token = params.get('token');
     if (token) {
       localStorage.setItem(TOKEN_KEY, token);
-      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+      params.delete('token');
+      var qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
     }
+  }
+
+  function renderSettingsStatus(s) {
+    var statusEl = document.getElementById('settings-key-status');
+    clear(statusEl);
+    if (s && s.hasApiKey) {
+      statusEl.appendChild(el('span', 'pill set', 'Set'));
+      statusEl.appendChild(document.createTextNode(s.apiKeyHint ? ' \u2022\u2022\u2022\u2022 ' + s.apiKeyHint : ''));
+    } else {
+      statusEl.appendChild(el('span', 'pill unset', 'Not set'));
+    }
+  }
+
+  function loadSettings() {
+    apiFetch('/api/admin/settings').then(function (s) {
+      renderSettingsStatus(s);
+      document.getElementById('s-baseUrl').value = (s && s.baseUrl) || '';
+      document.getElementById('s-apiKey').value = '';
+    }).catch(handleError);
+  }
+
+  function saveSettings(e) {
+    e.preventDefault();
+    hideBanner();
+    var body = {};
+    var apiKey = document.getElementById('s-apiKey').value;
+    if (apiKey) body.apiKey = apiKey;
+    body.baseUrl = document.getElementById('s-baseUrl').value;
+    apiFetch('/api/admin/settings', { method: 'PUT', body: JSON.stringify(body) }).then(function (s) {
+      renderSettingsStatus(s);
+      document.getElementById('s-baseUrl').value = (s && s.baseUrl) || '';
+      document.getElementById('s-apiKey').value = '';
+      showBanner('Settings saved.', false);
+    }).catch(handleError);
+  }
+
+  function goSettings() {
+    editingId = null;
+    convChatbotId = null;
+    convChatbotName = null;
+    hideBanner();
+    showView('view-settings');
+    loadSettings();
+  }
+
+  function snippetFor(id) {
+    return '<script src="' + window.location.origin + '/embed.js" data-chatbot-id="' + id + '"></scr' + 'ipt>';
   }
 
   function showList() {
@@ -419,10 +548,6 @@ body {
     }).catch(handleError);
   }
 
-  function snippetFor(cb) {
-    return '<script src="' + window.location.origin + '/embed.js" data-chatbot-id="' + cb.id + '"></scr' + 'ipt>';
-  }
-
   function renderList(chatbots) {
     var wrap = document.getElementById('list-wrap');
     clear(wrap);
@@ -433,7 +558,7 @@ body {
     var table = el('table', 'table');
     var thead = el('thead');
     var headRow = el('tr');
-    ['Name', 'Website', 'Model', 'Enabled', 'API key', 'Created', 'Actions'].forEach(function (h) {
+    ['Name', 'Website', 'Model', 'Enabled', 'Created', 'Actions'].forEach(function (h) {
       headRow.appendChild(el('th', null, h));
     });
     thead.appendChild(headRow);
@@ -455,7 +580,6 @@ body {
       tr.appendChild(urlTd);
       tr.appendChild(el('td', null, cb.model || '\u2014'));
       tr.appendChild(el('td', null, cb.enabled ? 'Yes' : 'No'));
-      tr.appendChild(el('td', null, cb.apiKeyHint ? '\u2022\u2022\u2022\u2022 ' + cb.apiKeyHint : '\u2014'));
       tr.appendChild(el('td', null, fmtDate(cb.createdAt)));
       var actions = el('td', 'actions');
       actions.appendChild(btn('Edit', 'btn btn-sm', function () { openEdit(cb.id); }));
@@ -472,8 +596,8 @@ body {
 
       var embedRow = el('tr', 'embed-row');
       var embedTd = el('td');
-      embedTd.colSpan = 7;
-      var snippet = snippetFor(cb);
+      embedTd.colSpan = 6;
+      var snippet = snippetFor(cb.id);
       var pre = el('pre', 'embed-pre');
       pre.appendChild(el('code', null, snippet));
       var copyBtn = btn('Copy', 'btn btn-sm', function () { copyText(snippet, copyBtn); });
@@ -512,6 +636,18 @@ body {
     done(ok);
   }
 
+  function setImportState() {
+    var enabled = !!editingId;
+    document.getElementById('btn-import').disabled = !enabled;
+    var statusEl = document.getElementById('import-status');
+    if (!enabled) {
+      statusEl.className = 'import-msg';
+      statusEl.textContent = 'Save the chatbot first, then import its website content.';
+    } else {
+      statusEl.textContent = '';
+    }
+  }
+
   function resetForm() {
     document.getElementById('f-name').value = '';
     document.getElementById('f-url').value = '';
@@ -520,21 +656,25 @@ body {
     document.getElementById('f-color-text').value = '#0f172a';
     document.getElementById('f-model').value = '';
     document.getElementById('f-baseUrl').value = '';
-    document.getElementById('f-apiKey').value = '';
-    document.getElementById('f-apiKey-hint').textContent = '';
     document.getElementById('f-temp').value = '0.7';
     document.getElementById('f-maxTokens').value = '512';
-    document.getElementById('f-facts').value = '';
     document.getElementById('f-enabled').checked = true;
+    document.getElementById('f-enabled-wrap').hidden = true;
+    document.getElementById('f-facts-hours').value = '';
+    document.getElementById('f-facts-contact').value = '';
+    document.getElementById('f-facts-faq').value = '';
+    document.getElementById('f-facts-products').value = '';
+    document.getElementById('f-facts-misc').value = '';
+    document.getElementById('f-import-url').value = '';
     document.getElementById('form-error').hidden = true;
+    document.getElementById('import-status').textContent = '';
+    setImportState();
   }
 
   function openCreate() {
     editingId = null;
     resetForm();
     document.getElementById('form-title').textContent = 'New chatbot';
-    document.getElementById('f-model').placeholder = 'gpt-4o-mini';
-    document.getElementById('f-baseUrl').placeholder = 'https://api.openai.com/v1';
     hideBanner();
     showView('view-form');
   }
@@ -543,6 +683,7 @@ body {
     editingId = id;
     resetForm();
     document.getElementById('form-title').textContent = 'Edit chatbot';
+    document.getElementById('f-enabled-wrap').hidden = false;
     apiFetch('/api/admin/chatbots/' + id).then(function (cb) {
       document.getElementById('f-name').value = cb.name || '';
       document.getElementById('f-url').value = cb.websiteUrl || '';
@@ -554,13 +695,24 @@ body {
       document.getElementById('f-baseUrl').value = cb.baseUrl || '';
       document.getElementById('f-temp').value = cb.temperature !== undefined && cb.temperature !== null ? cb.temperature : 0.7;
       document.getElementById('f-maxTokens').value = cb.maxTokens !== undefined && cb.maxTokens !== null ? cb.maxTokens : 512;
-      document.getElementById('f-facts').value = cb.businessFacts || '';
       document.getElementById('f-enabled').checked = !!cb.enabled;
-      document.getElementById('f-apiKey').value = '';
-      document.getElementById('f-apiKey').placeholder = cb.apiKeyHint ? 'Leave blank to keep current key (\u2022\u2022\u2022\u2022 ' + cb.apiKeyHint + ')' : 'Leave blank to keep current key';
-      document.getElementById('f-apiKey-hint').textContent = '';
+      var facts = cb.facts || {};
+      document.getElementById('f-facts-hours').value = facts.hours || '';
+      document.getElementById('f-facts-contact').value = facts.contact || '';
+      document.getElementById('f-facts-faq').value = facts.faq || '';
+      document.getElementById('f-facts-products').value = facts.products || '';
+      document.getElementById('f-facts-misc').value = facts.misc || cb.businessFacts || '';
+      document.getElementById('f-import-url').value = cb.websiteUrl || '';
+      setImportState();
       showView('view-form');
-    }).catch(handleError);
+    }).catch(function (err) {
+      if (err.unauthorized) {
+        handleError(err);
+        return;
+      }
+      showList();
+      handleError(err);
+    });
   }
 
   function readColor() {
@@ -569,27 +721,30 @@ body {
   }
 
   function collectBody() {
-    var body = {
+    return {
       name: document.getElementById('f-name').value.trim(),
       websiteUrl: document.getElementById('f-url').value.trim(),
       welcomeMessage: document.getElementById('f-welcome').value,
       brandColor: readColor(),
-      businessFacts: document.getElementById('f-facts').value,
       model: document.getElementById('f-model').value.trim(),
       baseUrl: document.getElementById('f-baseUrl').value.trim(),
       temperature: num(document.getElementById('f-temp').value, 0.7),
-      maxTokens: Math.round(num(document.getElementById('f-maxTokens').value, 512))
+      maxTokens: Math.round(num(document.getElementById('f-maxTokens').value, 512)),
+      facts: {
+        hours: document.getElementById('f-facts-hours').value,
+        contact: document.getElementById('f-facts-contact').value,
+        faq: document.getElementById('f-facts-faq').value,
+        products: document.getElementById('f-facts-products').value,
+        misc: document.getElementById('f-facts-misc').value
+      }
     };
-    var apiKey = document.getElementById('f-apiKey').value;
-    if (apiKey) body.apiKey = apiKey;
-    if (editingId) body.enabled = document.getElementById('f-enabled').checked;
-    return body;
   }
 
   function submitForm(e) {
     e.preventDefault();
     document.getElementById('form-error').hidden = true;
     var body = collectBody();
+    if (editingId) body.enabled = document.getElementById('f-enabled').checked;
     var req;
     if (editingId) {
       req = apiFetch('/api/admin/chatbots/' + editingId, { method: 'PUT', body: JSON.stringify(body) });
@@ -606,6 +761,27 @@ body {
       var fe = document.getElementById('form-error');
       fe.textContent = err.message || 'Validation failed.';
       fe.hidden = false;
+    });
+  }
+
+  function importFromSite() {
+    if (!editingId) return;
+    var statusEl = document.getElementById('import-status');
+    var url = document.getElementById('f-import-url').value.trim();
+    if (!url) {
+      statusEl.className = 'import-msg err';
+      statusEl.textContent = 'Enter a URL to import from.';
+      return;
+    }
+    statusEl.className = 'import-msg';
+    statusEl.textContent = 'Importing...';
+    apiFetch('/api/admin/chatbots/' + editingId + '/scrape', { method: 'POST', body: JSON.stringify({ url: url }) }).then(function (data) {
+      document.getElementById('f-facts-misc').value = data.text || '';
+      statusEl.className = 'import-msg ok';
+      statusEl.textContent = 'Imported. Review the text below and trim as needed.';
+    }).catch(function (err) {
+      statusEl.className = 'import-msg err';
+      statusEl.textContent = err.message || 'Import failed.';
     });
   }
 
@@ -640,16 +816,14 @@ body {
       var item = el('div', 'conv-item');
       var main = el('div', 'conv-main');
       var displayName = c.visitorName || 'anonymous';
-      var nameEl = el('div', 'conv-name', displayName);
-      main.appendChild(nameEl);
+      main.appendChild(el('div', 'conv-name', displayName));
       var metaParts = [];
       if (c.visitorEmail) metaParts.push(c.visitorEmail);
       metaParts.push(c.messageCount + (c.messageCount === 1 ? ' message' : ' messages'));
       metaParts.push(fmtDate(c.updatedAt));
       main.appendChild(el('div', 'conv-meta', metaParts.join(' \u00b7 ')));
       item.appendChild(main);
-      var badge = el('span', 'badge ' + (c.status === 'open' ? 'open' : 'closed'), c.status || 'unknown');
-      item.appendChild(badge);
+      item.appendChild(el('span', 'badge ' + (c.status === 'open' ? 'open' : 'closed'), c.status || 'unknown'));
       item.addEventListener('click', function () { openConversation(c.id); });
       list.appendChild(item);
     });
@@ -690,26 +864,31 @@ body {
     });
   }
 
+  function goBackToConversations() {
+    if (convChatbotId) loadConversations(convChatbotId, convChatbotName);
+    else showList();
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     handleToken();
-    document.getElementById('nav-home').addEventListener('click', showList);
+    document.getElementById('nav-chatbots').addEventListener('click', showList);
+    document.getElementById('nav-settings').addEventListener('click', goSettings);
     document.getElementById('btn-new').addEventListener('click', openCreate);
     document.getElementById('btn-cancel').addEventListener('click', showList);
     document.getElementById('chatbot-form').addEventListener('submit', submitForm);
-    document.getElementById('conv-back').addEventListener('click', function () {
-      if (convChatbotId) loadConversations(convChatbotId, convChatbotName);
-      else showList();
-    });
-    document.getElementById('msg-back').addEventListener('click', function () {
-      if (convChatbotId) loadConversations(convChatbotId, convChatbotName);
-      else showList();
-    });
+    document.getElementById('settings-form').addEventListener('submit', saveSettings);
+    document.getElementById('btn-import').addEventListener('click', importFromSite);
+    document.getElementById('conv-back').addEventListener('click', goBackToConversations);
+    document.getElementById('msg-back').addEventListener('click', goBackToConversations);
     document.getElementById('f-color').addEventListener('input', function () {
       document.getElementById('f-color-text').value = this.value;
     });
     document.getElementById('f-color-text').addEventListener('input', function () {
       var v = this.value.trim();
       if (/^#[0-9a-fA-F]{6}$/.test(v)) document.getElementById('f-color').value = v;
+    });
+    document.getElementById('f-url').addEventListener('input', function () {
+      document.getElementById('f-import-url').value = this.value;
     });
     showList();
   });

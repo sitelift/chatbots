@@ -9,7 +9,7 @@ const {
   captureLead,
 } = require('../services/conversations');
 const { chatCompletion } = require('../providers/openai');
-const { decryptKey } = require('../crypto');
+const settings = require('../services/settings');
 const { consume } = require('../ratelimit');
 const { AppError } = require('../errors');
 const config = require('../config');
@@ -92,11 +92,21 @@ router.post(
     const messages = history.map((m) => ({ role: m.role, content: m.content }));
     messages.unshift({ role: 'system', content: SYSTEM_PROMPT + '\n\n' + chatbot.business_facts });
 
+    const apiKey = settings.getOpenaiApiKey() || config.openaiApiKey;
+    if (!apiKey) {
+      throw new AppError(400, 'AI_KEY_NOT_CONFIGURED', 'No API key configured. Set it in Admin > Settings or via OPENAI_API_KEY.');
+    }
+    const baseUrl =
+      chatbot.base_url ||
+      settings.getOpenaiBaseUrl() ||
+      config.openaiBaseUrl ||
+      'https://api.openai.com/v1';
+
     let reply;
     try {
       reply = await chatCompletion({
-        baseUrl: chatbot.base_url,
-        apiKey: decryptKey(chatbot.api_key_encrypted),
+        baseUrl,
+        apiKey,
         model: chatbot.model,
         messages,
         temperature: chatbot.temperature,

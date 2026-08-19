@@ -4,9 +4,10 @@ SiteLift Chatbots stores everything in a single SQLite database. This document d
 
 ## Overview
 
-Three core tables:
+Four tables:
 
-- **chatbots** — one row per website chatbot. Holds identity, configuration, the business-facts system prompt, and the (encrypted) AI API key.
+- **chatbots** — one row per website chatbot. Holds identity, configuration, and the business-facts system prompt.
+- **settings** — a small key-value table holding global server settings, including the single AI-provider API key shared by all chatbots.
 - **conversations** — one row per visitor thread, belonging to a chatbot.
 - **messages** — the individual user/assistant turns within a conversation.
 
@@ -15,6 +16,8 @@ Three core tables:
 ```
 chatbots 1 ──── * conversations 1 ──── * messages
 ```
+
+`settings` is a standalone key-value table with no foreign-key relationships to the others.
 
 ## Table: `chatbots`
 
@@ -26,10 +29,9 @@ chatbots 1 ──── * conversations 1 ──── * messages
 | `welcome_message` | TEXT | First message shown in the widget panel. |
 | `brand_color` | TEXT | Hex color used by the widget (e.g. `#0f172a`). |
 | `business_facts` | TEXT | **The system prompt body.** Free-form English business facts. |
+| `facts_json` | TEXT (nullable) | JSON object `{ hours, contact, faq, products, misc }` (string fields) backing the dashboard's 5 labeled textareas. `NULL` when a raw `business_facts` string is used. |
 | `model` | TEXT | Provider model id, e.g. `gpt-4o-mini`. |
 | `base_url` | TEXT | OpenAI-compatible API base, e.g. `https://api.openai.com/v1`. |
-| `api_key_encrypted` | TEXT | Encrypted API key. **Never stored in plaintext.** `NULL` if not set. |
-| `api_key_hint` | TEXT | Last 4 chars of the key, for display ("•••• abcd"). `NULL` if unset. |
 | `temperature` | REAL | Default `0.7`. |
 | `max_tokens` | INTEGER | Default `512`. |
 | `enabled` | INTEGER (bool) | `1` = active (serves chat), `0` = disabled (widget shows offline). |
@@ -41,11 +43,29 @@ chatbots 1 ──── * conversations 1 ──── * messages
 - Generated as a random token (e.g. 22-char base62) so it is not enumerable by sequential guessing.
 - Used directly in the embed snippet (`data-chatbot-id`) and in public URLs.
 
-### Notes on `api_key_encrypted` / `api_key_hint`
+### Notes on `facts_json`
 
-- The key is encrypted with AES-256-GCM using the server's `ENCRYPTION_KEY` (see [SECURITY.md](SECURITY.md)).
-- Only the *encrypted* blob and a short hint are stored. The plaintext key exists only in memory, for the duration of an AI call.
-- Admin API responses always redact this — the client never receives the key back.
+- When the admin edits facts through the dashboard's 5 labeled textareas, the server stores the structured fields in `facts_json` and assembles the single `business_facts` system prompt from the non-empty sections — `Business hours:` / `Contact:` / `FAQ:` / `Products and services:` / `Additional information:` — each as `Heading:\n<value>`, sections joined by blank lines.
+- `facts_json` exists so the form can prefill on edit; `business_facts` is what is sent to the AI.
+- A raw `businessFacts` string is still accepted and stored directly in `business_facts`, leaving `facts_json` `NULL`.
+
+## Table: `settings`
+
+A small key-value table holding global server configuration — specifically the single AI-provider API key and base URL shared by all chatbots.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `key` | TEXT (PK) | Setting name, e.g. `openai_api_key`. |
+| `value` | TEXT | The setting's value. |
+| `hint` | TEXT (nullable) | Display hint, e.g. the last 4 chars of the key. `NULL` when not applicable. |
+| `updated_at` | TEXT (ISO-8601) | |
+
+### Notes
+
+- `openai_api_key` — the single global AI key for all chatbots. `value` holds the **AES-256-GCM encrypted blob** (using the server's `ENCRYPTION_KEY`, see [SECURITY.md](SECURITY.md)); `hint` holds the last 4 chars for display ("•••• abcd").
+- `openai_base_url` — optional OpenAI-compatible base URL, stored as **plaintext** (e.g. `https://api.openai.com/v1`).
+- Resolution is **settings first, environment fallback**: the effective key is `settings.openai_api_key` (decrypted) or `OPENAI_API_KEY` env; the effective base URL is chatbot `base_url` → `settings.openai_base_url` → `OPENAI_BASE_URL` env → `https://api.openai.com/v1`. With no key configured anywhere, chat returns `400 AI_KEY_NOT_CONFIGURED`.
+- Admin API responses never return the key itself — only `hasApiKey`, `apiKeyHint`, and `baseUrl` (see [API.md](API.md)).
 
 ## Table: `conversations`
 
@@ -108,10 +128,10 @@ v1 uses a simple schema-creation-on-startup approach: `CREATE TABLE IF NOT EXIST
 
 **chatbots**
 
-| id | name | business_facts | base_url | model | api_key_hint |
+| id | name | business_facts | facts_json | base_url | model |
 | --- | --- | --- | --- | --- | --- |
-| `ch_abc123` | Acme Support | "We sell widgets. Hours: Mon–Fri 9–5. Shipping is free over $50. Returns within 30 days." | `https://api.openai.com/v1` | `gpt-4o-mini` | `•••• a3f9` |
-| `ch_def456` | Bob's Bakery | "Bakery in Portland. We open at 7am daily. Custom cake orders need 48h notice." | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini` | `•••• 7c2d` |
+| `ch_abc123` | Acme Support | "We sell widgets. Hours: Mon–Fri 9–5. Shipping is free over $50. Returns within 30 days." | `{ "hours": "Mon–Fri 9–5", "products": "Widgets; free shipping over $50", "misc": "Returns within 30 days." }` | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| `ch_def456` | Bob's Bakery | "Bakery in Portland. We open at 7am daily. Custom cake orders need 48h notice." | `{ "hours": "7am daily", "products": "Cakes, pastries", "misc": "Custom cake orders need 48h notice." }` | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini` |
 
 **conversations**
 

@@ -27,14 +27,20 @@ function initSchema() {
       welcome_message TEXT,
       brand_color TEXT,
       business_facts TEXT,
+      facts_json TEXT,
       model TEXT,
       base_url TEXT,
-      api_key_encrypted TEXT,
-      api_key_hint TEXT,
       temperature REAL,
       max_tokens INTEGER,
       enabled INTEGER,
       created_at TEXT,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      hint TEXT,
       updated_at TEXT
     );
 

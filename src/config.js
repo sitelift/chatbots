@@ -11,6 +11,9 @@ const config = {
   rateLimitMax: 20,
   rateLimitWindowMs: 60 * 1000,
   contextWindow: 20,
+  scrapeMaxChars: 20000,
+  openaiApiKey: process.env.OPENAI_API_KEY || '',
+  openaiBaseUrl: process.env.OPENAI_BASE_URL || '',
 };
 
 module.exports = config;

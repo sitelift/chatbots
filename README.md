@@ -13,7 +13,7 @@ A website owner embeds a small JavaScript widget on their site. The widget float
 ## Design principles
 
 1. **Dead simple.** No vector databases, no auth system, no microservices, no front-end framework. A few REST endpoints, one SQLite file, one HTML admin page, one vanilla-JS widget.
-2. **Bring your own key.** Each chatbot has its own OpenAI-compatible API key. Keys are stored **encrypted** on the server and never sent to the browser or the widget.
+2. **One global AI key.** All chatbots share a single OpenAI-compatible API key, set once in Admin → Settings (stored **encrypted**) or via the `OPENAI_API_KEY` env var. Never sent to the browser or the widget.
 3. **One admin, no login.** The admin is a single trusted person. Authentication is deliberately out of scope; the docs describe how to protect the dashboard with a reverse proxy or an optional token.
 4. **Business facts live in the system prompt.** Editing facts = editing a textarea and saving. No re-indexing, no pipelines.
 5. **Anonymous, AI-driven lead capture.** No forced forms. The bot naturally asks for a name/email and steers visitors toward calling the business; details land on the conversation.
@@ -37,8 +37,8 @@ Embed widget (target website)
         │  POST /api/chat/:chatbotId/messages
         ▼
 SiteLift API server
-        │  1. load chatbot config (system prompt + encrypted API key)
-        │  2. decrypt API key
+        │  1. load chatbot config (business facts)
+        │  2. resolve the global API key (settings or env)
         │  3. store visitor message in SQLite
         ▼
 OpenAI-compatible API (OpenAI, OpenRouter, Ollama, ...)
@@ -70,7 +70,7 @@ Tracked in [`AGENTS.md`](AGENTS.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTU
 
 - Node.js + Express + SQLite backend, vanilla JS widget and admin page.
 - One global admin, no auth by default; optional token for the dashboard.
-- Each chatbot stores its own encrypted API key server-side.
+- One global AI API key (encrypted at rest, set in Admin → Settings or via env) shared by all chatbots.
 - AI providers supported via any **OpenAI-compatible** endpoint (`/v1/chat/completions`).
 - Context window: last 20 messages per turn.
 - Abuse prevention (v1): 20-message cap + 2000-char message limit + ~20 msgs/min per-visitor rate limit.

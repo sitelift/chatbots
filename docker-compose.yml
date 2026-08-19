@@ -11,6 +11,8 @@ services:
       DATABASE_PATH: ${DATABASE_PATH:-data/sitelift.db}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
     volumes:
       - sitelift-data:/app/data
     restart: unless-stopped
