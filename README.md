@@ -4,7 +4,7 @@ A small, self-hosted platform for **one admin running many AI-powered chatbots**
 
 Each chatbot answers visitors using an OpenAI-compatible API. Business facts — pricing, hours, FAQs, product info — are written straight into the chatbot's **system prompt**. No vector databases, no embeddings, no complexity.
 
-> **Status: design phase.** This repo currently contains specification and design documentation only. See [`docs/`](docs/ARCHITECTURE.md) for the full design; implementation has not started yet.
+> **Status: implemented.** Node.js + Express + SQLite backend, a vanilla-JS embed widget, and a single-page admin dashboard. See [`docs/`](docs/) for the full design and [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for how to run it.
 
 ## The idea in one paragraph
 
@@ -61,6 +61,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the detailed lifecycle.
 | [`docs/EMBED.md`](docs/EMBED.md) | How to install and configure the widget on a target website |
 | [`docs/API.md`](docs/API.md) | Full REST API reference (public + admin) |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | How API keys are protected, threat model, deployment hardening |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Docker + reverse-proxy deployment guide, backups, hardening checklist |
 | [`AGENTS.md`](AGENTS.md) | Guide for AI coding assistants working in this repo |
 
 ## Decisions (settled)

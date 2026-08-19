@@ -2,7 +2,7 @@
 
 You are working on the **SiteLift Chatbots** project: a self-hosted platform for **one admin running many AI-powered chatbots** across different websites. Each chatbot answers visitors via an OpenAI-compatible API, with business facts embedded in the system prompt. **No vector databases, no embeddings** — knowledge is just a textarea in the admin dashboard.
 
-**Current status: design phase.** The repo contains specification and design documentation only. No implementation code exists yet. Before writing any code, read `docs/ARCHITECTURE.md` in full — it is the implementation spec.
+**Current status: implemented.** The repo contains the full Node.js + Express + SQLite implementation (`server.js`, `src/`, `public/`) alongside the design docs. Before writing any code, read `docs/ARCHITECTURE.md` in full — it is the implementation spec.
 
 ## Project in one paragraph
 
@@ -18,6 +18,7 @@ A website owner embeds a small vanilla-JS widget on their site. It floats a chat
 | [`docs/EMBED.md`](docs/EMBED.md) | Widget install guide, `data-*` attributes, visitor identity | ✅ done |
 | [`docs/API.md`](docs/API.md) | Full REST API reference (embed, public chat, admin) | ✅ done |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | API key encryption, threat model, deployment hardening | ✅ done |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Docker + reverse-proxy deployment guide, backups, hardening checklist | ✅ done |
 ## Key architecture decisions (settled)
 
 - **Stack:** Node.js + Express + SQLite backend; vanilla-JS widget and single-page admin UI. No front-end framework, no build step for the client.
@@ -43,7 +44,7 @@ Tracked in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5. Highlights:
 
 ## Working rules for AI assistants
 
-- **This is a design-phase repo.** Do not start writing application code until the design docs are finalized and the user asks for implementation.
+- **The codebase is implemented.** Follow the conventions above (vanilla JS, no deps for the client) and the module layout under `src/` and `public/`. Update the relevant docs in the same change as any behavior change.
 - Keep the documentation the single source of truth. If you change behavior, update the relevant docs in the same change.
 - `docs/ARCHITECTURE.md` §5 "Open questions" and §6 "Non-goals" must stay accurate — move items to "settled" only when explicitly agreed.
 - Never add code comments unless asked; never commit unless the user asks.

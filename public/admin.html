@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiteLift Admin</title>
+<style>
+:root {
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --danger: #dc2626;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --bg: #f1f5f9;
+  --card: #ffffff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.topbar {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.topbar-inner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.app-title { font-weight: 700; font-size: 17px; }
+.nav-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.nav-link:hover { background: #eff6ff; }
+.container { max-width: 1040px; margin: 0 auto; padding: 24px 20px 60px; }
+.view { display: block; }
+.view[hidden] { display: none; }
+.banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  font-weight: 500;
+}
+.banner.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.banner.notice { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+.section-head h1 { font-size: 22px; margin: 0; }
+.section-head h2 { font-size: 18px; margin: 0; }
+.head-left { display: flex; align-items: center; gap: 12px; }
+.btn {
+  display: inline-block;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn:hover { background: #f8fafc; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-strong); }
+.btn-danger { color: var(--danger); border-color: #fecaca; background: #fff; }
+.btn-danger:hover { background: #fef2f2; }
+.btn-sm { padding: 4px 10px; font-size: 13px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+.table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.table th, .table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 14px; }
+.table th { background: #f8fafc; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+.table tr:last-child td { border-bottom: none; }
+.table td.actions { white-space: nowrap; }
+.table td.actions .btn { margin-right: 4px; }
+.embed-pre {
+  margin: 6px 0;
+  padding: 10px 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.embed-pre code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+.embed-row td { background: #f8fafc; }
+.link { color: var(--accent); text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.empty { color: var(--muted); padding: 24px; text-align: center; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.field { display: flex; flex-direction: column; }
+.field.full { grid-column: 1 / -1; }
+.field label { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #334155; }
+.field input[type="text"],
+.field input[type="password"],
+.field input[type="number"],
+.field textarea {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text);
+  width: 100%;
+}
+.field input:focus, .field textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.field textarea { resize: vertical; min-height: 90px; }
+.field input[type="color"] { width: 52px; height: 38px; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: #fff; cursor: pointer; }
+.color-row { display: flex; align-items: center; gap: 8px; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; }
+.checkbox-row input { width: 16px; height: 16px; }
+.form-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.form-actions { display: flex; gap: 10px; margin-top: 20px; }
+.conv-list { display: flex; flex-direction: column; gap: 10px; }
+.conv-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+.conv-item:hover { border-color: var(--accent); background: #f8fafc; }
+.conv-main { min-width: 0; }
+.conv-name { font-weight: 600; }
+.conv-meta { color: var(--muted); font-size: 13px; }
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge.open { background: #dcfce7; color: #15803d; }
+.badge.closed { background: #e2e8f0; color: #475569; }
+.timeline { display: flex; flex-direction: column; gap: 12px; }
+.msg-row { display: flex; }
+.msg-row.msg-user { justify-content: flex-end; }
+.msg-row.msg-assistant { justify-content: flex-start; }
+.msg-bubble {
+  max-width: 70%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg-user .msg-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg-assistant .msg-bubble { background: #e2e8f0; color: var(--text); border-bottom-left-radius: 4px; }
+.muted { color: var(--muted); }
+@media (max-width: 720px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .field.full { grid-column: auto; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="app-title">SiteLift Admin</span>
+    <button id="nav-home" class="nav-link" type="button">Chatbots</button>
+  </div>
+</header>
+<main class="container">
+  <div id="banner" class="banner" hidden></div>
+
+  <section id="view-list" class="view">
+    <div class="section-head">
+      <h1>Chatbots</h1>
+      <button id="btn-new" class="btn btn-primary" type="button">New chatbot</button>
+    </div>
+    <div id="list-wrap"></div>
+  </section>
+
+  <section id="view-form" class="view" hidden>
+    <div class="section-head">
+      <h1 id="form-title">New chatbot</h1>
+    </div>
+    <div class="card">
+      <form id="chatbot-form">
+        <div id="form-error" class="form-error" hidden></div>
+        <div class="form-grid">
+          <div class="field full">
+            <label for="f-name">Name</label>
+            <input id="f-name" type="text" required>
+          </div>
+          <div class="field full">
+            <label for="f-url">Website URL</label>
+            <input id="f-url" type="text" placeholder="https://example.com">
+          </div>
+          <div class="field full">
+            <label for="f-welcome">Welcome message</label>
+            <input id="f-welcome" type="text" placeholder="Hi! How can I help you today?">
+          </div>
+          <div class="field">
+            <label for="f-color">Brand color</label>
+            <div class="color-row">
+              <input id="f-color" type="color" value="#0f172a">
+              <input id="f-color-text" type="text" maxlength="7" value="#0f172a">
+            </div>
+          </div>
+          <div class="field">
+            <label for="f-model">Model</label>
+            <input id="f-model" type="text" placeholder="gpt-4o-mini">
+          </div>
+          <div class="field">
+            <label for="f-baseUrl">Base URL</label>
+            <input id="f-baseUrl" type="text" placeholder="https://api.openai.com/v1">
+          </div>
+          <div class="field">
+            <label for="f-apiKey">API key</label>
+            <input id="f-apiKey" type="password" autocomplete="new-password">
+            <span class="muted" id="f-apiKey-hint" style="font-size:12px;margin-top:4px;"></span>
+          </div>
+          <div class="field">
+            <label for="f-temp">Temperature</label>
+            <input id="f-temp" type="number" step="0.1" min="0" max="2" value="0.7">
+          </div>
+          <div class="field">
+            <label for="f-maxTokens">Max tokens</label>
+            <input id="f-maxTokens" type="number" step="1" min="1" value="512">
+          </div>
+          <div class="field full">
+            <label for="f-facts">Business facts (system prompt)</label>
+            <textarea id="f-facts" placeholder="We sell widgets. Hours: Mon-Fri 9-5. Shipping is free over $50."></textarea>
+          </div>
+          <div class="field full">
+            <label class="checkbox-row"><input id="f-enabled" type="checkbox" checked> Enabled</label>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button id="btn-save" class="btn btn-primary" type="submit">Save</button>
+          <button id="btn-cancel" class="btn" type="button">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section id="view-conversations" class="view" hidden>
+    <div class="section-head">
+      <div class="head-left">
+        <button id="conv-back" class="btn btn-sm" type="button">Back</button>
+        <h1 id="conv-title">Conversations</h1>
+      </div>
+    </div>
+    <div id="conv-wrap"></div>
+  </section>
+
+  <section id="view-messages" class="view" hidden>
+    <div class="section-head">
+      <div class="head-left">
+        <button id="msg-back" class="btn btn-sm" type="button">Back</button>
+        <h1 id="msg-title">Conversation</h1>
+      </div>
+      <span id="msg-status" class="badge open"></span>
+    </div>
+    <div class="card">
+      <div id="messages-wrap" class="timeline"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var TOKEN_KEY = 'siteliftAdminToken';
+  var editingId = null;
+  var convChatbotId = null;
+  var convChatbotName = null;
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined && text !== null) node.textContent = text;
+    return node;
+  }
+
+  function clear(node) {
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function btn(label, className, onClick) {
+    var b = el('button', className, label);
+    b.type = 'button';
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function num(v, d) {
+    var n = parseFloat(v);
+    return isNaN(n) ? d : n;
+  }
+
+  function fmtDate(s) {
+    if (!s) return '\u2014';
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return String(s);
+    return d.toLocaleString();
+  }
+
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  function apiFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    var token = getToken();
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (typeof opts.body === 'string') opts.headers['Content-Type'] = 'application/json';
+    return fetch(url, opts).then(function (res) {
+      return res.text().then(function (text) {
+        var data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (e) { data = {}; }
+        if (res.status === 401) {
+          var e401 = new Error('Unauthorized \u2014 invalid admin token');
+          e401.unauthorized = true;
+          throw e401;
+        }
+        if (!res.ok) {
+          var msg = (data && data.error && data.error.message) || ('Request failed (' + res.status + ')');
+          var e2 = new Error(msg);
+          e2.status = res.status;
+          throw e2;
+        }
+        return data;
+      });
+    });
+  }
+
+  function showBanner(message, isError) {
+    var b = document.getElementById('banner');
+    b.textContent = message;
+    b.className = 'banner ' + (isError ? 'error' : 'notice');
+    b.hidden = false;
+  }
+
+  function hideBanner() {
+    document.getElementById('banner').hidden = true;
+  }
+
+  function handleError(err) {
+    showBanner(err.message || 'Something went wrong.', true);
+  }
+
+  function showView(id) {
+    var views = document.querySelectorAll('.view');
+    for (var i = 0; i < views.length; i++) views[i].hidden = true;
+    document.getElementById(id).hidden = false;
+  }
+
+  function handleToken() {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('token');
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+      window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+    }
+  }
+
+  function showList() {
+    editingId = null;
+    convChatbotId = null;
+    convChatbotName = null;
+    hideBanner();
+    showView('view-list');
+    loadChatbots();
+  }
+
+  function loadChatbots() {
+    var wrap = document.getElementById('list-wrap');
+    clear(wrap);
+    wrap.appendChild(el('div', 'empty', 'Loading...'));
+    apiFetch('/api/admin/chatbots').then(function (data) {
+      renderList(data && data.chatbots ? data.chatbots : []);
+    }).catch(handleError);
+  }
+
+  function snippetFor(cb) {
+    return '<script src="' + window.location.origin + '/embed.js" data-chatbot-id="' + cb.id + '"></scr' + 'ipt>';
+  }
+
+  function renderList(chatbots) {
+    var wrap = document.getElementById('list-wrap');
+    clear(wrap);
+    if (!chatbots.length) {
+      wrap.appendChild(el('div', 'empty', 'No chatbots yet. Click "New chatbot" to create one.'));
+      return;
+    }
+    var table = el('table', 'table');
+    var thead = el('thead');
+    var headRow = el('tr');
+    ['Name', 'Website', 'Model', 'Enabled', 'API key', 'Created', 'Actions'].forEach(function (h) {
+      headRow.appendChild(el('th', null, h));
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    chatbots.forEach(function (cb) {
+      var tr = el('tr');
+      tr.appendChild(el('td', null, cb.name || '\u2014'));
+      var urlTd = el('td');
+      if (cb.websiteUrl) {
+        var a = el('a', 'link', cb.websiteUrl);
+        a.href = cb.websiteUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        urlTd.appendChild(a);
+      } else {
+        urlTd.textContent = '\u2014';
+      }
+      tr.appendChild(urlTd);
+      tr.appendChild(el('td', null, cb.model || '\u2014'));
+      tr.appendChild(el('td', null, cb.enabled ? 'Yes' : 'No'));
+      tr.appendChild(el('td', null, cb.apiKeyHint ? '\u2022\u2022\u2022\u2022 ' + cb.apiKeyHint : '\u2014'));
+      tr.appendChild(el('td', null, fmtDate(cb.createdAt)));
+      var actions = el('td', 'actions');
+      actions.appendChild(btn('Edit', 'btn btn-sm', function () { openEdit(cb.id); }));
+      actions.appendChild(btn('Conversations', 'btn btn-sm', function () { loadConversations(cb.id, cb.name); }));
+      actions.appendChild(btn('Delete', 'btn btn-sm btn-danger', function () {
+        if (window.confirm('Delete chatbot "' + cb.name + '" and all of its conversations and messages?')) {
+          apiFetch('/api/admin/chatbots/' + cb.id, { method: 'DELETE' }).then(function () {
+            loadChatbots();
+          }).catch(handleError);
+        }
+      }));
+      tr.appendChild(actions);
+      tbody.appendChild(tr);
+
+      var embedRow = el('tr', 'embed-row');
+      var embedTd = el('td');
+      embedTd.colSpan = 7;
+      var snippet = snippetFor(cb);
+      var pre = el('pre', 'embed-pre');
+      pre.appendChild(el('code', null, snippet));
+      var copyBtn = btn('Copy', 'btn btn-sm', function () { copyText(snippet, copyBtn); });
+      pre.appendChild(copyBtn);
+      embedTd.appendChild(pre);
+      embedRow.appendChild(embedTd);
+      tbody.appendChild(embedRow);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+  }
+
+  function copyText(text, b) {
+    function done(ok) {
+      var original = b.textContent;
+      b.textContent = ok ? 'Copied' : 'Copy failed';
+      setTimeout(function () { b.textContent = original; }, 1200);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { legacyCopy(text, done); });
+    } else {
+      legacyCopy(text, done);
+    }
+  }
+
+  function legacyCopy(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    done(ok);
+  }
+
+  function resetForm() {
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-url').value = '';
+    document.getElementById('f-welcome').value = '';
+    document.getElementById('f-color').value = '#0f172a';
+    document.getElementById('f-color-text').value = '#0f172a';
+    document.getElementById('f-model').value = '';
+    document.getElementById('f-baseUrl').value = '';
+    document.getElementById('f-apiKey').value = '';
+    document.getElementById('f-apiKey-hint').textContent = '';
+    document.getElementById('f-temp').value = '0.7';
+    document.getElementById('f-maxTokens').value = '512';
+    document.getElementById('f-facts').value = '';
+    document.getElementById('f-enabled').checked = true;
+    document.getElementById('form-error').hidden = true;
+  }
+
+  function openCreate() {
+    editingId = null;
+    resetForm();
+    document.getElementById('form-title').textContent = 'New chatbot';
+    document.getElementById('f-model').placeholder = 'gpt-4o-mini';
+    document.getElementById('f-baseUrl').placeholder = 'https://api.openai.com/v1';
+    hideBanner();
+    showView('view-form');
+  }
+
+  function openEdit(id) {
+    editingId = id;
+    resetForm();
+    document.getElementById('form-title').textContent = 'Edit chatbot';
+    apiFetch('/api/admin/chatbots/' + id).then(function (cb) {
+      document.getElementById('f-name').value = cb.name || '';
+      document.getElementById('f-url').value = cb.websiteUrl || '';
+      document.getElementById('f-welcome').value = cb.welcomeMessage || '';
+      var color = cb.brandColor || '#0f172a';
+      document.getElementById('f-color').value = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#0f172a';
+      document.getElementById('f-color-text').value = color;
+      document.getElementById('f-model').value = cb.model || '';
+      document.getElementById('f-baseUrl').value = cb.baseUrl || '';
+      document.getElementById('f-temp').value = cb.temperature !== undefined && cb.temperature !== null ? cb.temperature : 0.7;
+      document.getElementById('f-maxTokens').value = cb.maxTokens !== undefined && cb.maxTokens !== null ? cb.maxTokens : 512;
+      document.getElementById('f-facts').value = cb.businessFacts || '';
+      document.getElementById('f-enabled').checked = !!cb.enabled;
+      document.getElementById('f-apiKey').value = '';
+      document.getElementById('f-apiKey').placeholder = cb.apiKeyHint ? 'Leave blank to keep current key (\u2022\u2022\u2022\u2022 ' + cb.apiKeyHint + ')' : 'Leave blank to keep current key';
+      document.getElementById('f-apiKey-hint').textContent = '';
+      showView('view-form');
+    }).catch(handleError);
+  }
+
+  function readColor() {
+    var t = document.getElementById('f-color-text').value.trim();
+    return t || document.getElementById('f-color').value;
+  }
+
+  function collectBody() {
+    var body = {
+      name: document.getElementById('f-name').value.trim(),
+      websiteUrl: document.getElementById('f-url').value.trim(),
+      welcomeMessage: document.getElementById('f-welcome').value,
+      brandColor: readColor(),
+      businessFacts: document.getElementById('f-facts').value,
+      model: document.getElementById('f-model').value.trim(),
+      baseUrl: document.getElementById('f-baseUrl').value.trim(),
+      temperature: num(document.getElementById('f-temp').value, 0.7),
+      maxTokens: Math.round(num(document.getElementById('f-maxTokens').value, 512))
+    };
+    var apiKey = document.getElementById('f-apiKey').value;
+    if (apiKey) body.apiKey = apiKey;
+    if (editingId) body.enabled = document.getElementById('f-enabled').checked;
+    return body;
+  }
+
+  function submitForm(e) {
+    e.preventDefault();
+    document.getElementById('form-error').hidden = true;
+    var body = collectBody();
+    var req;
+    if (editingId) {
+      req = apiFetch('/api/admin/chatbots/' + editingId, { method: 'PUT', body: JSON.stringify(body) });
+    } else {
+      req = apiFetch('/api/admin/chatbots', { method: 'POST', body: JSON.stringify(body) });
+    }
+    req.then(function () {
+      showList();
+    }).catch(function (err) {
+      if (err.unauthorized) {
+        handleError(err);
+        return;
+      }
+      var fe = document.getElementById('form-error');
+      fe.textContent = err.message || 'Validation failed.';
+      fe.hidden = false;
+    });
+  }
+
+  function loadConversations(id, name) {
+    convChatbotId = id;
+    convChatbotName = name;
+    hideBanner();
+    showView('view-conversations');
+    document.getElementById('conv-title').textContent = (name || 'Chatbot') + ' \u2014 Conversations';
+    var wrap = document.getElementById('conv-wrap');
+    clear(wrap);
+    wrap.appendChild(el('div', 'empty', 'Loading...'));
+    apiFetch('/api/admin/chatbots/' + id + '/conversations').then(function (data) {
+      renderConversations(data && data.conversations ? data.conversations : []);
+    }).catch(handleError);
+  }
+
+  function renderConversations(conversations) {
+    var wrap = document.getElementById('conv-wrap');
+    clear(wrap);
+    conversations.sort(function (a, b) {
+      var ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      var tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return tb - ta;
+    });
+    if (!conversations.length) {
+      wrap.appendChild(el('div', 'empty', 'No conversations yet.'));
+      return;
+    }
+    var list = el('div', 'conv-list');
+    conversations.forEach(function (c) {
+      var item = el('div', 'conv-item');
+      var main = el('div', 'conv-main');
+      var displayName = c.visitorName || 'anonymous';
+      var nameEl = el('div', 'conv-name', displayName);
+      main.appendChild(nameEl);
+      var metaParts = [];
+      if (c.visitorEmail) metaParts.push(c.visitorEmail);
+      metaParts.push(c.messageCount + (c.messageCount === 1 ? ' message' : ' messages'));
+      metaParts.push(fmtDate(c.updatedAt));
+      main.appendChild(el('div', 'conv-meta', metaParts.join(' \u00b7 ')));
+      item.appendChild(main);
+      var badge = el('span', 'badge ' + (c.status === 'open' ? 'open' : 'closed'), c.status || 'unknown');
+      item.appendChild(badge);
+      item.addEventListener('click', function () { openConversation(c.id); });
+      list.appendChild(item);
+    });
+    wrap.appendChild(list);
+  }
+
+  function openConversation(id) {
+    hideBanner();
+    showView('view-messages');
+    document.getElementById('msg-title').textContent = 'Conversation';
+    var statusEl = document.getElementById('msg-status');
+    statusEl.className = 'badge open';
+    statusEl.textContent = '';
+    var wrap = document.getElementById('messages-wrap');
+    clear(wrap);
+    wrap.appendChild(el('div', 'empty', 'Loading...'));
+    apiFetch('/api/admin/conversations/' + id + '/messages').then(function (data) {
+      renderMessages(data);
+    }).catch(handleError);
+  }
+
+  function renderMessages(data) {
+    var conv = data && data.conversation ? data.conversation : {};
+    var statusEl = document.getElementById('msg-status');
+    statusEl.textContent = conv.status || 'open';
+    statusEl.className = 'badge ' + (conv.status === 'open' ? 'open' : 'closed');
+    var wrap = document.getElementById('messages-wrap');
+    clear(wrap);
+    var msgs = (data && data.messages) ? data.messages : [];
+    if (!msgs.length) {
+      wrap.appendChild(el('div', 'empty', 'No messages in this conversation.'));
+      return;
+    }
+    msgs.forEach(function (m) {
+      var row = el('div', 'msg-row ' + (m.role === 'user' ? 'msg-user' : 'msg-assistant'));
+      row.appendChild(el('div', 'msg-bubble', m.content || ''));
+      wrap.appendChild(row);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    handleToken();
+    document.getElementById('nav-home').addEventListener('click', showList);
+    document.getElementById('btn-new').addEventListener('click', openCreate);
+    document.getElementById('btn-cancel').addEventListener('click', showList);
+    document.getElementById('chatbot-form').addEventListener('submit', submitForm);
+    document.getElementById('conv-back').addEventListener('click', function () {
+      if (convChatbotId) loadConversations(convChatbotId, convChatbotName);
+      else showList();
+    });
+    document.getElementById('msg-back').addEventListener('click', function () {
+      if (convChatbotId) loadConversations(convChatbotId, convChatbotName);
+      else showList();
+    });
+    document.getElementById('f-color').addEventListener('input', function () {
+      document.getElementById('f-color-text').value = this.value;
+    });
+    document.getElementById('f-color-text').addEventListener('input', function () {
+      var v = this.value.trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(v)) document.getElementById('f-color').value = v;
+    });
+    showList();
+  });
+})();
+</script>
+</body>
+</html>

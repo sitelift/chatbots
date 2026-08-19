@@ -138,8 +138,8 @@ Server:
   6. Load recent message history for the conversation (capped at 20 messages).
   7. Decrypt the chatbot's API key.
   8. Call the AI provider:
-        POST {baseUrl}/v1/chat/completions
-        Authorization: Bearer <decrypted key>
+         POST {baseUrl}/chat/completions   (baseUrl already includes the version path, e.g. https://api.openai.com/v1)
+         Authorization: Bearer <decrypted key>
         body = system prompt + history + new user message
   9. If provider errors → 502 with a generic message; log details server-side.
   10. Insert the assistant reply row.
