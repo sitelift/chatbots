@@ -16,6 +16,8 @@ A website owner embeds a small JavaScript widget on their site. The widget float
 2. **Bring your own key.** Each chatbot has its own OpenAI-compatible API key. Keys are stored **encrypted** on the server and never sent to the browser or the widget.
 3. **One admin, no login.** The admin is a single trusted person. Authentication is deliberately out of scope; the docs describe how to protect the dashboard with a reverse proxy or an optional token.
 4. **Business facts live in the system prompt.** Editing facts = editing a textarea and saving. No re-indexing, no pipelines.
+5. **Anonymous, AI-driven lead capture.** No forced forms. The bot naturally asks for a name/email and steers visitors toward calling the business; details land on the conversation.
+6. **Built-in abuse prevention + Docker.** A 20-message context cap, a max message length, and a per-visitor rate limit keep token spend bounded. Deployed via Docker.
 
 ## The three pieces
 
@@ -61,11 +63,16 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the detailed lifecycle.
 | [`docs/SECURITY.md`](docs/SECURITY.md) | How API keys are protected, threat model, deployment hardening |
 | [`AGENTS.md`](AGENTS.md) | Guide for AI coding assistants working in this repo |
 
-## Open questions / decisions to dial in
+## Decisions (settled)
 
-Tracked in [`AGENTS.md`](AGENTS.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Current key decisions:
+Tracked in [`AGENTS.md`](AGENTS.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Key decisions:
 
 - Node.js + Express + SQLite backend, vanilla JS widget and admin page.
 - One global admin, no auth by default; optional token for the dashboard.
 - Each chatbot stores its own encrypted API key server-side.
 - AI providers supported via any **OpenAI-compatible** endpoint (`/v1/chat/completions`).
+- Context window: last 20 messages per turn.
+- Abuse prevention (v1): 20-message cap + 2000-char message limit + ~20 msgs/min per-visitor rate limit.
+- Lead capture: AI-driven (no forced form), steering visitors toward calling the business.
+- Deployment: Docker.
+- Usage/cost dashboards: deferred — working and simple first, front end later.

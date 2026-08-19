@@ -54,6 +54,10 @@ The rest of the widget's appearance (welcome message, brand color, model) is pul
 - It also stores the current `conversationId`. On return visits, the widget resumes the most recent conversation for that visitor/chatbot, so the visitor sees their prior thread.
 - `data-visitor-id` lets an advanced site supply its own id (e.g. the site's logged-in user id) instead of the anonymous one.
 
+## Lead capture (no forced form)
+
+The widget is **anonymous by default** — it never shows a name/email form. Lead capture is driven by the AI itself: the system prompt (business facts) tells the bot to naturally ask for a name/email and steer the visitor toward calling the business. If the visitor volunteers a name/email, the server stores them on the conversation and the admin sees them in the dashboard. See [ARCHITECTURE.md §8](ARCHITECTURE.md#8-lead-capture-and-call-conversion).
+
 ## Chat message flow
 
 ```

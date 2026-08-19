@@ -48,7 +48,7 @@ This document covers how SiteLift Chatbots protects secrets, its threat model, a
 | Attacker reads the SQLite DB file | Keys are AES-256-GCM encrypted; without `ENCRYPTION_KEY` they are useless. DB file permissions are restrictive. |
 | Attacker gets `ENCRYPTION_KEY` | Full key compromise — protect it like a password; keep it out of the repo and out of backups alongside the DB. |
 | Attacker reads admin responses | Keys are redacted; only a 4-char hint is exposed. |
-| Attacker calls the public chat API to spend your AI quota | Unavoidable in v1 (public by design). Mitigate via provider-side rate/cost limits and disable unused chatbots. Documented in ARCHITECTURE non-goals. |
+| Attacker calls the public chat API to spend your AI quota | v1 ships minimal abuse prevention: 20-message context cap, 2000-char message limit, and a ~20 msgs/min per-visitor rate limit (see ARCHITECTURE §7). Still recommend provider-side cost limits. |
 | Attacker guesses/enumerates chatbot ids | Ids are long random strings (unguessable), but are still public once embedded. They are **not** a security boundary — treat them as public identifiers. |
 | Prompt injection via visitor content | The system prompt instructs the model to stay in role and ignore attempts to reveal the system prompt or instructions. (This is a best-effort mitigation; no prompt is foolproof.) |
 | XSS in the widget from AI replies | The widget renders AI text as plain text, never as HTML, and does not use `innerHTML` with model output. Escape all output. |
@@ -57,14 +57,16 @@ This document covers how SiteLift Chatbots protects secrets, its threat model, a
 
 ## 4. Deployment hardening checklist
 
-- Use a dedicated, low-privilege OS user to run the server.
-- Keep the SQLite DB and `.env` out of version control (see `.gitignore`).
-- Set restrictive file permissions on `data/` and `.env` (e.g. `600`).
-- Terminate TLS at a reverse proxy; never serve plain HTTP to the public internet.
-- Generate `ENCRYPTION_KEY` with `openssl rand -base64 32`; store it in a secrets manager.
-- If the dashboard is reachable on the public internet, set `ADMIN_TOKEN` **and** prefer binding to localhost behind the proxy.
-- Enable the AI provider's own cost/rate limits to cap abuse.
-- Take regular backups of the DB file. If backing up offsite, keep `ENCRYPTION_KEY` out of the same backup.
+**Deployment target: Docker.** A `Dockerfile` + `docker-compose.yml` (with a named volume for `data/`) will be provided at implementation time. The checklist:
+
+- Run the container as a non-root user; keep the SQLite DB and `.env` inside the container as a named volume, not in the image layer.
+- Keep the DB and `.env` out of version control (see `.gitignore`).
+- Restrict file permissions on `data/` and `.env` (e.g. `600`).
+- Terminate TLS at a reverse proxy (Caddy/nginx) in front of the container; never serve plain HTTP to the public internet.
+- Generate `ENCRYPTION_KEY` with `openssl rand -base64 32`; store it in a secrets manager or a git-ignored `.env`.
+- If the dashboard is reachable on the public internet, set `ADMIN_TOKEN` **and** prefer binding the admin surface to localhost behind the proxy.
+- Enable the AI provider's own cost/rate limits to cap abuse (in addition to SiteLift's built-in limits).
+- Take regular backups of the DB volume. If backing up offsite, keep `ENCRYPTION_KEY` out of the same backup.
 - Rotate `ENCRYPTION_KEY` and re-encrypt keys with a documented procedure (note: re-encryption requires access to all plaintext keys or a re-entry of keys via the dashboard).
 
 ## 5. Environment variables
@@ -81,6 +83,6 @@ See `.env.example` for all values. Security-relevant ones:
 ## 6. What is intentionally NOT in scope for v1
 
 - Full user auth / multi-tenancy (single admin by design).
-- Rate limiting / abuse control on the public chat endpoint.
+- Per-IP rate limiting, daily per-chatbot budgets, or abuse flags (v1 has a minimal per-visitor rate limit only — see ARCHITECTURE §7).
 - Key vault integration.
 - Audit logging of admin actions.

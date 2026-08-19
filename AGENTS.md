@@ -18,7 +18,6 @@ A website owner embeds a small vanilla-JS widget on their site. It floats a chat
 | [`docs/EMBED.md`](docs/EMBED.md) | Widget install guide, `data-*` attributes, visitor identity | ✅ done |
 | [`docs/API.md`](docs/API.md) | Full REST API reference (embed, public chat, admin) | ✅ done |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | API key encryption, threat model, deployment hardening | ✅ done |
-
 ## Key architecture decisions (settled)
 
 - **Stack:** Node.js + Express + SQLite backend; vanilla-JS widget and single-page admin UI. No front-end framework, no build step for the client.
@@ -27,6 +26,10 @@ A website owner embeds a small vanilla-JS widget on their site. It floats a chat
 - **Knowledge:** `business_facts` on the chatbot becomes the system prompt. Plain English, no retrieval.
 - **Provider contract:** any OpenAI-compatible `POST /v1/chat/completions` endpoint.
 - **Context window (v1):** last 20 messages per conversation sent to the provider each turn.
+- **Abuse prevention (v1):** 20-message cap + 2000-char message limit + ~20 msgs/min per-visitor rate limit (in-memory, keyed by visitorId).
+- **Lead capture:** anonymous by default; the AI naturally asks for name/email and steers visitors toward calling the business. Volunteered name/email stored on the conversation.
+- **Deployment:** Docker (Dockerfile + docker-compose with a named volume for `data/`).
+- **Usage/cost dashboards:** deferred — not in v1.
 - **Streaming:** out of scope for v1 (non-streaming JSON response).
 - **Public routes:** CORS allow any origin (needed for embedding). Admin routes gated by optional token.
 
@@ -34,10 +37,9 @@ A website owner embeds a small vanilla-JS widget on their site. It floats a chat
 
 Tracked in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5. Highlights:
 
-1. Confirm the 20-message context window vs a token-count cap.
-2. Whether to add per-chatbot message count / cost estimate in the dashboard.
-3. Deployment target (systemd / Docker / PaaS) — affects security docs.
-4. Optional visitor name/email lead capture (v2).
+1. Exact rate-limit numbers (start with ~20 msgs/min, 2000 chars; tune after real traffic).
+2. Whether `visitorId` should rotate after N days of inactivity.
+3. Final Docker image base, volume layout, and reverse-proxy example (written during implementation in `docs/DEPLOYMENT.md`).
 
 ## Working rules for AI assistants
 

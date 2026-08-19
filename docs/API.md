@@ -88,6 +88,7 @@ Sends a visitor message and returns the AI reply.
 | 403 | `CONVERSATION_MISMATCH` | Supplied `conversationId` belongs to a different chatbot. |
 | 404 | `CHATBOT_NOT_FOUND` | Chatbot id doesn't exist. |
 | 410 | `CHATBOT_DISABLED` | Chatbot disabled. |
+| 429 | `TOO_MANY_REQUESTS` | Per-visitor rate limit exceeded (~20 msgs/min; see ARCHITECTURE §7). |
 | 502 | `AI_PROVIDER_ERROR` | The AI provider call failed (see [SECURITY](SECURITY.md) for error handling). |
 
 **Behavior:** creates the conversation if needed, stores the user message, calls the provider, stores the reply, returns it. Details in [ARCHITECTURE.md](ARCHITECTURE.md) §3.2.
@@ -186,6 +187,8 @@ Lists conversations for a chatbot, most recent first, with a message count.
     {
       "id": "cv_xyz789",
       "visitorId": "v_88dK2...",
+      "visitorName": "Alex",        // null if not volunteered
+      "visitorEmail": "alex@x.com", // null if not volunteered
       "status": "open",
       "messageCount": 4,
       "createdAt": "2026-08-19T12:00:00.000Z",
@@ -194,6 +197,8 @@ Lists conversations for a chatbot, most recent first, with a message count.
   ]
 }
 ```
+
+**Behavior:** if the visitor volunteered a name/email during the chat, they are returned here (see ARCHITECTURE §8).
 
 ### `GET /api/admin/conversations/:conversationId/messages`
 
