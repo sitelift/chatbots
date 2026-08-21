@@ -14,6 +14,7 @@ import {
   insertMessage,
 } from '../services/conversations'
 import { streamCompletion } from '../services/provider'
+import { resolveProviderCredentials } from '../services/settings'
 
 export class HttpError extends Error {
   constructor(
@@ -78,8 +79,13 @@ async function prepare(c: Context) {
 
   const userMessageId = insertMessage(conversationId, 'user', input.content)
   const history = getHistory(conversationId, CONTEXT_MESSAGE_LIMIT - 1)
+  const credentials = resolveProviderCredentials()
 
-  return { bot, conversationId, userMessageId, history, userContent: input.content }
+  if (!credentials.apiKey) {
+    throw new HttpError(400, errorCodes.AI_KEY_NOT_CONFIGURED, 'No AI provider key is configured')
+  }
+
+  return { bot, conversationId, userMessageId, history, userContent: input.content, credentials }
 }
 
 function buildProviderMessages(
@@ -128,10 +134,11 @@ publicRoutes.get('/chatbots/:id', async (c) => {
 
 publicRoutes.post('/chat/:chatbotId/messages', async (c) => {
   try {
-    const { bot, conversationId, history, userContent } = await prepare(c)
+    const { bot, conversationId, history, userContent, credentials } = await prepare(c)
     const result = await streamCompletion(
       buildProviderMessages(bot.systemPrompt, history, userContent),
       bot,
+      credentials,
       () => {},
     )
     const messageId = insertMessage(conversationId, 'assistant', result.text, {
@@ -152,7 +159,7 @@ publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
     return handleError(c, err)
   }
 
-  const { bot, conversationId, userMessageId, history, userContent } = prepared
+  const { bot, conversationId, userMessageId, history, userContent, credentials } = prepared
 
   c.header('X-Accel-Buffering', 'no')
   for (const [k, v] of Object.entries(sseHeaders())) c.header(k, v)
@@ -170,6 +177,7 @@ publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
       const result = await streamCompletion(
         buildProviderMessages(bot.systemPrompt, history, userContent),
         bot,
+        credentials,
         (text) => {
           reply += text
           void s.write(sseFrame({ event: 'token', text }))

@@ -1,5 +1,3 @@
-import { assertAiConfigured } from '../env'
-
 export interface ProviderMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -42,15 +40,14 @@ function parseFrame(json: string): ParsedChunk {
 export async function streamCompletion(
   messages: ProviderMessage[],
   options: ProviderOptions,
+  credentials: { apiKey: string; baseUrl: string },
   onToken: (text: string) => void,
 ): Promise<StreamResult> {
-  const { apiKey, baseUrl } = assertAiConfigured()
-
-  const res = await fetch(`${options.baseUrl ?? baseUrl}/chat/completions`, {
+  const res = await fetch(`${options.baseUrl ?? credentials.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${credentials.apiKey}`,
     },
     body: JSON.stringify({
       model: options.model,

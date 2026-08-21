@@ -33,6 +33,14 @@ export const chatbots = sqliteTable('chatbots', {
     .$defaultFn(() => new Date()),
 })
 
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .$defaultFn(() => new Date()),
+})
+
 export const conversations = sqliteTable(
   'conversations',
   {

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { env } from './env'
+import { adminRoutes } from './routes/admin'
 import { health } from './routes/health'
 import { publicRoutes } from './routes/public'
 
@@ -13,6 +14,7 @@ export function createApp() {
 
   app.route('/health', health)
   app.route('/api', publicRoutes)
+  app.route('/api/admin', adminRoutes)
 
   app.get('/embed.js', async (c) => {
     const source = await readFile(env.widgetDistPath, 'utf8')
@@ -39,8 +41,10 @@ export function createApp() {
 
   app.get('/admin', (c) => c.redirect('/admin/'))
 
-  app.get('/demo', (c) =>
-    c.html(
+  app.get('/demo', (c) => {
+    const chatbotId = c.req.query('chatbot') ?? 'ch_demo'
+    const safeId = chatbotId.replace(/[^a-zA-Z0-9_-]/g, '')
+    return c.html(
       `<!doctype html>
 <html lang="en">
 <head>
@@ -57,11 +61,11 @@ export function createApp() {
   <h1>SiteLift widget demo</h1>
   <p>This page loads the compiled embed script exactly like a client website would. The bubble should appear bottom-right.</p>
 </main>
-<script src="/embed.js" data-chatbot-id="ch_demo"></script>
+<script src="/embed.js" data-chatbot-id="${safeId}"></script>
 </body>
 </html>`,
-    ),
-  )
+    )
+  })
 
   return app
 }

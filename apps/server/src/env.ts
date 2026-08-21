@@ -27,13 +27,5 @@ export const env = {
     process.env.DASHBOARD_DIST_PATH ??
     fileURLToPath(new URL('../../dashboard/dist', import.meta.url)),
   isProd: process.env.NODE_ENV === 'production',
-}
-
-export function assertAiConfigured(): { apiKey: string; baseUrl: string } {
-  if (!env.openaiApiKey) {
-    const err = new Error('AI key not configured') as Error & { code: string }
-    err.code = 'AI_KEY_NOT_CONFIGURED'
-    throw err
-  }
-  return { apiKey: env.openaiApiKey, baseUrl: env.openaiBaseUrl }
+  adminToken: process.env.ADMIN_TOKEN ?? '',
 }
