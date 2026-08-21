@@ -1,51 +1,58 @@
-# SiteLift Chatbots — AGENTS.md
+# SiteLift — AGENTS.md
 
-You are working on the **SiteLift Chatbots** project: a self-hosted platform for **one admin running many AI-powered chatbots** across different websites. Each chatbot answers visitors via an OpenAI-compatible API, with business facts embedded in the system prompt. **No vector databases, no embeddings** — knowledge is just a textarea in the admin dashboard.
+You are working on the **SiteLift** project: an open-source, self-hosted AI chatbot platform for **web agencies** running many branded chatbots across client websites. Each chatbot answers visitors via an OpenAI-compatible API with business facts embedded in the system prompt. **No vector databases, no embeddings** — knowledge is structured textareas in the dashboard.
 
-**Current status: implemented.** The repo contains the full Node.js + Express + SQLite implementation (`server.js`, `src/`, `public/`) alongside the design docs. Before writing any code, read `docs/ARCHITECTURE.md` in full — it is the implementation spec.
+**Current status: v2 rebuild underway — Milestone 0 complete.** The monorepo is scaffolded (`apps/server`, `apps/dashboard`, `packages/shared`, `packages/widget`) with the streaming chat loop working end-to-end and tested. The legacy v1 Express code has been removed; port its proven ideas (rate limiting, prompt assembly, encryption scheme) from the v1 docs where still relevant.
+
+Before writing any code, read [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (implementation spec) in full.
 
 ## Project in one paragraph
 
-A website owner embeds a small vanilla-JS widget on their site. It floats a chat bubble bottom-right. Visitor messages go to the SiteLift server, which looks up the chatbot's config (business facts), forwards to an OpenAI-compatible `/v1/chat/completions` endpoint using a single global API key, and returns the reply. Everything is stored in SQLite. The admin manages all chatbots from a single dashboard page.
+A web agency self-hosts SiteLift via Docker. From the agency dashboard they create chatbots for client websites, invite business owners as `client` users, and paste an embed script on each site. Visitors chat with an on-brand widget (Shadow DOM, dependency-free `embed.js`) that streams replies from an OpenAI-compatible provider using a single global encrypted API key. Leads (name/email captured by the AI) trigger email notifications. Owners edit their own facts and watch stats; agencies see everything. Everything persists in SQLite.
 
 ## Documentation (table of contents)
 
 | Document | What it covers | Status |
 | --- | --- | --- |
-| [`README.md`](README.md) | High-level overview, design principles, quick start, doc index | ✅ done |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **Implementation spec.** End-to-end flow, components, request lifecycle, key decisions, open questions, non-goals | ✅ done |
-| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | SQLite schema: `chatbots`, `settings`, `conversations`, `messages`; context window | ✅ done |
-| [`docs/EMBED.md`](docs/EMBED.md) | Widget install guide, `data-*` attributes, visitor identity | ✅ done |
-| [`docs/API.md`](docs/API.md) | Full REST API reference (embed, public chat, admin) | ✅ done |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | API key encryption, threat model, deployment hardening | ✅ done |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Docker + reverse-proxy deployment guide, backups, hardening checklist | ✅ done |
-## Key architecture decisions (settled)
+| [`README.md`](README.md) | Overview, principles, quick flow, doc index | ✅ current |
+| [`docs/PRODUCT.md`](docs/PRODUCT.md) | **Product contract**: positioning, personas, principles, v1 feature set, definition of done | ✅ done |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **Implementation spec**: v2 stack, monorepo layout, components, lifecycles, decisions | ✅ done |
+| [`docs/STYLE.md`](docs/STYLE.md) | **Design contract**: north stars, DNA rules, tokens, component + widget specs, release gate | ✅ done |
+| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Schema details | 🔶 legacy — revise during rebuild |
+| [`docs/API.md`](docs/API.md) | REST reference | 🔶 legacy — revise during rebuild |
+| [`docs/EMBED.md`](docs/EMBED.md) | Widget install guide | 🔶 legacy — revise during rebuild |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, hardening | 🔶 legacy — revise during rebuild |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Docker deployment guide | 🔶 legacy — revise during rebuild |
 
-- **Stack:** Node.js + Express + SQLite backend; vanilla-JS widget and single-page admin UI. No front-end framework, no build step for the client.
-- **Data model:** one global admin, no auth by default; optional `ADMIN_TOKEN`. Tables: `chatbots`, `conversations`, `messages`, `settings`.
-- **AI key:** one **global** OpenAI-compatible key shared by all chatbots, **AES-256-GCM encrypted** at rest in the `settings` table (set in Admin → Settings) with `OPENAI_API_KEY`/`OPENAI_BASE_URL` env fallback. Never sent to browser/widget; only a 4-char hint is ever returned.
-- **Knowledge:** `business_facts` on the chatbot becomes the system prompt. Stored as structured `facts` (`hours`, `contact`, `faq`, `products`, `misc`) that the server assembles into the prompt; a one-time admin-only scrape-to-draft import pulls text from the target site (no runtime retrieval).
-- **Provider contract:** any OpenAI-compatible `POST /v1/chat/completions` endpoint.
-- **Context window (v1):** last 20 messages per conversation sent to the provider each turn.
-- **Abuse prevention (v1):** 20-message cap + 2000-char message limit + ~20 msgs/min per-visitor rate limit (in-memory, keyed by visitorId).
-- **Lead capture:** anonymous by default; the AI naturally asks for name/email and steers visitors toward calling the business. Volunteered name/email stored on the conversation.
-- **Deployment:** Docker (Dockerfile + docker-compose with a named volume for `data/`).
-- **Usage/cost dashboards:** deferred — not in v1.
-- **Streaming:** out of scope for v1 (non-streaming JSON response).
-- **Public routes:** CORS allow any origin (needed for embedding). Admin routes gated by optional token.
+## Settled decisions
 
-## Open questions (to dial in — resolve before implementing)
+- **Stack:** TypeScript strict · Node 22 · Hono + Zod · SQLite + Drizzle ORM (+ drizzle-kit, drizzle-zod) · better-auth (email+password + passkeys, sessions, CSRF) · pino · nodemailer.
+- **Frontend:** ONE React app (React 19 + Vite + Tailwind CSS v4 + shadcn/ui + TanStack Router/Query) serving both roles; role-aware routing; design language per PRODUCT.md principle 1.
+- **Monorepo:** pnpm workspaces — `apps/server`, `apps/dashboard`, `packages/shared` (Zod contracts), `packages/widget`, `packages/config`. Tooling: Biome, Vitest, GitHub Actions.
+- **Widget:** TS source → single dependency-free `embed.js`, Shadow DOM, `data-*` config, localStorage ids, streaming with optimistic UI, quick replies, optional proactive nudge, language matching, accessible (keyboard/ARIA/reduced motion).
+- **Roles:** `agency` (full reach) / `client` (assigned chatbots only); ownership-chain scoping enforced in the query layer, never just UI.
+- **Client capabilities:** clients edit their own facts/welcome/appearance directly (no approval queue).
+- **AI:** official `openai` SDK with `baseURL` override; any OpenAI-compatible provider; system prompt = guardrail prefix + assembled facts sections + FAQ pairs; context = last 20 messages.
+- **Key handling:** one global key, AES-256-GCM encrypted at rest, env fallback; never sent to browsers; 4-char hint only.
+- **Security:** per-chatbot domain allowlist (Origin/Referer enforced), rate limits (~20 msgs/min per visitor, auth limits), 2000-char cap, SSRF-filtered admin-only scrape import, audit log, security headers.
+- **Leads:** AI-driven capture onto conversations; instant email notification (SMTP); CSV export.
+- **White-label:** free and core — agency branding across dashboard + widget; powered-by badge toggleable.
+- **Deployment:** self-host Docker only; single container, named volume, migrations on boot, healthcheck.
 
-Tracked in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5. Highlights:
+## Open questions
 
-1. Exact rate-limit numbers (start with ~20 msgs/min, 2000 chars; tune after real traffic).
-2. Whether `visitorId` should rotate after N days of inactivity.
-3. ~~Final Docker image base, volume layout, and reverse-proxy example~~ — **settled**, documented in `docs/DEPLOYMENT.md`.
+1. Exact rate-limit numbers — tune after real traffic.
+2. `visitorId` rotation after N days of inactivity.
+3. Knowledge-gap detection heuristics — refine during build.
+
+## Non-goals (v1)
+
+RAG/embeddings/runtime retrieval · webhooks/Zapier · live human takeover inbox · billing/SaaS hosting · attachments/voice/images · automated custom domains.
 
 ## Working rules for AI assistants
 
-- **The codebase is implemented.** Follow the conventions above (vanilla JS, no deps for the client) and the module layout under `src/` and `public/`. Update the relevant docs in the same change as any behavior change.
-- Keep the documentation the single source of truth. If you change behavior, update the relevant docs in the same change.
-- `docs/ARCHITECTURE.md` §5 "Open questions" and §6 "Non-goals" must stay accurate — move items to "settled" only when explicitly agreed.
+- **Docs are the source of truth.** Update the relevant doc in the same change as any behavior change. Move items between "settled" and "open" only when explicitly agreed with the user.
+- New code goes in the monorepo layout (`apps/`, `packages/`) in TypeScript strict mode. Do not extend the legacy Express codebase except to port logic out of it.
+- Style bar: surfaces must meet [`docs/STYLE.md`](docs/STYLE.md) — tokens only, both color modes, all states designed. Ugly-but-working is not done.
 - Never add code comments unless asked; never commit unless the user asks.
-- Follow the repo's conventions (vanilla JS, no deps for the client) when implementation begins.
+- Follow repo conventions (Biome formatting, Vitest tests, Zod-validated boundaries).

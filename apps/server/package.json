@@ -1,0 +1,31 @@
+{
+  "name": "@sitelift/server",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/start.ts",
+    "start": "tsx src/start.ts",
+    "db:generate": "drizzle-kit generate",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "@sitelift/shared": "workspace:*",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^17.2.0",
+    "drizzle-orm": "^0.44.0",
+    "hono": "^4.9.0",
+    "pino": "^9.7.0",
+    "tsx": "^4.20.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.0",
+    "drizzle-kit": "^0.31.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

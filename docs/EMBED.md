@@ -1,5 +1,7 @@
 # Embedding the Widget
 
+> **Status: legacy v1 reference (vanilla-JS widget). Pending revision for the v2 architecture — see [ARCHITECTURE.md](ARCHITECTURE.md).**
+
 This document explains how a website owner installs and configures the SiteLift chat widget. It is a spec for the widget's public interface and the docs the admin sees in the dashboard.
 
 ## How the admin installs it

@@ -1,31 +1,31 @@
-# SiteLift Chatbots — Project Overview
+# SiteLift
 
-A small, self-hosted platform for **one admin running many AI-powered chatbots** across different websites.
+**The open-source, self-hosted AI chatbot platform for web agencies.**
 
-Each chatbot answers visitors using an OpenAI-compatible API. Business facts — pricing, hours, FAQs, product info — are written straight into the chatbot's **system prompt**. No vector databases, no embeddings, no complexity.
+One Docker container. Unlimited client chatbots. Your brand, not ours. Your API key, not our meter.
 
-> **Status: implemented.** Node.js + Express + SQLite backend, a vanilla-JS embed widget, and a single-page admin dashboard. See [`docs/`](docs/) for the full design and [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for how to run it.
+A web agency deploys SiteLift once, creates a branded AI chatbot for each client website, gives every business owner a login to their own bot, and bills clients whatever the market bears. Business facts live in the system prompt — no vector databases, no embeddings, no retrieval pipelines.
 
-## The idea in one paragraph
+> **Status: v2 rebuild underway — Milestone 0 complete.** The TypeScript monorepo (`apps/server`, `apps/dashboard`, `packages/*`) is scaffolded with the streaming chat loop working end-to-end. The legacy v1 Express implementation has been removed; its proven logic lives on in the new server. Scope and "done" are defined in [`docs/PRODUCT.md`](docs/PRODUCT.md).
 
-A website owner embeds a small JavaScript widget on their site. The widget floats a chat bubble in the bottom-right corner. When a visitor types a message, the widget sends it to the SiteLift server, which looks up the chatbot's configuration (system prompt + API key), forwards the message to an OpenAI-compatible API, and returns the AI's reply. Everything is stored in SQLite so the admin can read the conversations later. The admin manages all of their chatbots — one per website — from a single dashboard.
+## The three surfaces
+
+| Surface | Audience | What it does |
+| --- | --- | --- |
+| **Agency dashboard** | Web agency staff | Onboard clients, create/maintain chatbots, observe conversations, leads, analytics, manage settings |
+| **Owner portal** | Business owner (agency's client) | Edit business facts, read chat history, see stats — scoped to their own chatbot(s) |
+| **Widget** | Website visitor | On-brand streaming chat bubble that answers questions and captures leads |
+
+The dashboard and portal are one role-aware application; the widget is a dependency-free `embed.js` mounted in Shadow DOM.
 
 ## Design principles
 
-1. **Dead simple.** No vector databases, no auth system, no microservices, no front-end framework. A few REST endpoints, one SQLite file, one HTML admin page, one vanilla-JS widget.
-2. **One global AI key.** All chatbots share a single OpenAI-compatible API key, set once in Admin → Settings (stored **encrypted**) or via the `OPENAI_API_KEY` env var. Never sent to the browser or the widget.
-3. **One admin, no login.** The admin is a single trusted person. Authentication is deliberately out of scope; the docs describe how to protect the dashboard with a reverse proxy or an optional token.
-4. **Business facts live in the system prompt.** Editing facts = editing a textarea and saving. No re-indexing, no pipelines.
-5. **Anonymous, AI-driven lead capture.** No forced forms. The bot naturally asks for a name/email and steers visitors toward calling the business; details land on the conversation.
-6. **Built-in abuse prevention + Docker.** A 20-message context cap, a max message length, and a per-visitor rate limit keep token spend bounded. Deployed via Docker.
-
-## The three pieces
-
-| Piece | What it is | Where it lives |
-| --- | --- | --- |
-| **Admin dashboard** | A single HTML page to create/manage chatbots, edit system prompts, view conversations | Served by the SiteLift server at `/admin` |
-| **Embed widget** | A self-contained JS file visitors load on a target website | Served by the SiteLift server at `/embed.js` |
-| **API server** | Express app that serves the above and proxies chat to the AI provider | The SiteLift server itself |
+1. **Style is the product.** Every surface must feel clean, modern, premium. A half-built-looking surface is a bug.
+2. **Dead-simple operations.** One container, one SQLite file, auto-migrations, backups = copy a file.
+3. **Predictable economics.** BYO OpenAI-compatible API key, encrypted at rest. Token spend visible per chatbot.
+4. **Agency-first multi-tenancy.** Clients see only their world; agencies see everything. Enforced server-side.
+5. **Safe by default.** Rate limits, per-chatbot domain allowlists, CSRF, audit log, SSRF-filtered imports.
+6. **Honest AI.** Facts in the system prompt; the bot admits ignorance and points to humans.
 
 ## How a chat message flows
 
@@ -33,47 +33,46 @@ A website owner embeds a small JavaScript widget on their site. The widget float
 Visitor types "What are your hours?"
         │
         ▼
-Embed widget (target website)
-        │  POST /api/chat/:chatbotId/messages
+Widget (Shadow DOM) — optimistic user bubble
+        │  POST /api/chat/:chatbotId/messages/stream   (SSE)
         ▼
-SiteLift API server
-        │  1. load chatbot config (business facts)
-        │  2. resolve the global API key (settings or env)
-        │  3. store visitor message in SQLite
+SiteLift server (Hono)
+        │  1. load chatbot config + check domain allowlist
+        │  2. rate-limit + validate
+        │  3. store message (SQLite/Drizzle), flush meta event
+        │  4. resolve global key (encrypted at rest) + base URL
         ▼
-OpenAI-compatible API (OpenAI, OpenRouter, Ollama, ...)
-        │  returns assistant reply
+OpenAI-compatible API (OpenAI, OpenRouter, Groq, Ollama, ...)  stream:true
+        │  streams delta tokens
         ▼
-SiteLift API server  →  stores reply in SQLite  →  returns reply to widget
+SiteLift server proxies token events → persists reply + usage
         │
         ▼
-Embed widget renders the reply
+Widget renders tokens live; lead captured → email to owner
 ```
-
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the detailed lifecycle.
 
 ## Documentation index
 
-| Document | What it covers |
-| --- | --- |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | End-to-end flow, component responsibilities, request lifecycle |
-| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | SQLite schema: chatbots, conversations, messages |
-| [`docs/EMBED.md`](docs/EMBED.md) | How to install and configure the widget on a target website |
-| [`docs/API.md`](docs/API.md) | Full REST API reference (public + admin) |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | How API keys are protected, threat model, deployment hardening |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Docker + reverse-proxy deployment guide, backups, hardening checklist |
-| [`AGENTS.md`](AGENTS.md) | Guide for AI coding assistants working in this repo |
+| Document | What it covers | Status |
+| --- | --- | --- |
+| [`docs/PRODUCT.md`](docs/PRODUCT.md) | Positioning, personas, principles, full v1 feature set, definition of done | ✅ current |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | V2 implementation spec: stack, monorepo layout, components, lifecycles | ✅ current |
+| [`docs/STYLE.md`](docs/STYLE.md) | Design contract: north stars, tokens, component + widget specs, style release gate | ✅ current |
+| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | SQLite schema details | 🔶 legacy v1 — pending revision |
+| [`docs/API.md`](docs/API.md) | REST API reference | 🔶 legacy v1 — pending revision |
+| [`docs/EMBED.md`](docs/EMBED.md) | Widget install guide | 🔶 legacy v1 — pending revision |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Key protection, threat model, hardening | 🔶 legacy v1 — pending revision |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Docker deployment guide | 🔶 legacy v1 — pending revision |
+| [`AGENTS.md`](AGENTS.md) | Guide for AI coding assistants | ✅ current |
 
 ## Decisions (settled)
 
-Tracked in [`AGENTS.md`](AGENTS.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Key decisions:
+Tracked in [`AGENTS.md`](AGENTS.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md):
 
-- Node.js + Express + SQLite backend, vanilla JS widget and admin page.
-- One global admin, no auth by default; optional token for the dashboard.
-- One global AI API key (encrypted at rest, set in Admin → Settings or via env) shared by all chatbots.
-- AI providers supported via any **OpenAI-compatible** endpoint (`/v1/chat/completions`).
-- Context window: last 20 messages per turn.
-- Abuse prevention (v1): 20-message cap + 2000-char message limit + ~20 msgs/min per-visitor rate limit.
-- Lead capture: AI-driven (no forced form), steering visitors toward calling the business.
-- Deployment: Docker.
-- Usage/cost dashboards: deferred — working and simple first, front end later.
+- TypeScript strict everywhere; Node 22 + Hono + Zod; SQLite + Drizzle; better-auth (passwords + passkeys).
+- One React app (React 19 + Vite + Tailwind v4 + shadcn/ui + TanStack) serving both agency and client roles.
+- Widget authored in TS, built to a single dependency-free `embed.js` in Shadow DOM.
+- Roles `agency` / `client`; clients edit their own facts directly; scoping enforced server-side.
+- White-label free and core; powered-by badge toggleable; email-only lead notifications (SMTP).
+- Per-chatbot domain allowlists; global AI key AES-256-GCM encrypted at rest.
+- Deployment: self-hosted Docker only. No SaaS, no billing, no RAG in v1.

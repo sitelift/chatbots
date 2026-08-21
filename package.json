@@ -1,17 +1,29 @@
 {
-  "name": "sitelift-chatbots",
-  "version": "0.1.0",
+  "name": "sitelift",
+  "version": "0.2.0",
   "private": true,
-  "description": "Self-hosted platform for one admin running many AI-powered chatbots across different websites.",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "description": "Open-source, self-hosted AI chatbot platform for web agencies.",
+  "packageManager": "pnpm@10.34.5",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
-  "dependencies": {
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2"
+  "scripts": {
+    "dev": "pnpm --filter @sitelift/server dev",
+    "dev:dashboard": "pnpm --filter @sitelift/dashboard dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.1.0",
+    "typescript": "^5.9.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
   }
 }

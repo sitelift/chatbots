@@ -1,23 +1,30 @@
 # Data Model
 
+> **Status: legacy v1 reference (Express implementation). Pending revision for the v2 architecture — see [ARCHITECTURE.md](ARCHITECTURE.md).**
+
 SiteLift Chatbots stores everything in a single SQLite database. This document defines the schema. It is a design spec; the exact SQL will be implemented later.
 
 ## Overview
 
-Four tables:
+Eight tables:
 
-- **chatbots** — one row per website chatbot. Holds identity, configuration, and the business-facts system prompt.
-- **settings** — a small key-value table holding global server settings, including the single AI-provider API key shared by all chatbots.
-- **conversations** — one row per visitor thread, belonging to a chatbot.
-- **messages** — the individual user/assistant turns within a conversation.
+- **chatbots** — one row per website chatbot.
+- **settings** — key-value global settings (single AI key, base URL).
+- **conversations** — one row per visitor thread.
+- **messages** — user/assistant turns.
+- **admin_users** — email+password accounts (scrypt hash).
+- **admin_sessions** — httpOnly cookie sessions (SHA-256 hash).
+- **webauthn_credentials** — passkeys per user.
+- **admin_audit_log** — admin actions.
 
 ### Key relationships
 
 ```
 chatbots 1 ──── * conversations 1 ──── * messages
+admin_users 1 ──── * admin_sessions
+admin_users 1 ──── * webauthn_credentials
+settings is standalone key-value.
 ```
-
-`settings` is a standalone key-value table with no foreign-key relationships to the others.
 
 ## Table: `chatbots`
 
@@ -115,10 +122,67 @@ Each turn, the server sends the AI:
 
 > **Settled:** the 20-message cap is the v1 decision. Token-count-based capping was considered and rejected for simplicity. Related abuse-prevention defaults (max message length 2000 chars, ~20 msgs/min per visitor) are documented in [ARCHITECTURE.md §7](ARCHITECTURE.md#7-abuse-prevention).
 
-## Indexes
+## Table: `admin_users`
 
-- `idx_conversations_chatbot (chatbot_id)` — fast lookup of a chatbot's conversations.
-- `idx_messages_conversation (conversation_id, created_at)` — fast history retrieval for the context window.
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | TEXT PK | `usr_...` |
+| `email` | TEXT UNIQUE COLLATE NOCASE | login |
+| `password_hash` | TEXT | scrypt `scrypt$N$r$p$salt$hash` |
+| `name` | TEXT | nullable |
+| `role` | TEXT | `owner` |
+| `created_at` | TEXT | ISO-8601 |
+| `updated_at` | TEXT | ISO-8601 |
+
+## Table: `admin_sessions`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | TEXT PK | `sess_...` |
+| `user_id` | TEXT FK | owner |
+| `token_hash` | TEXT UNIQUE | SHA-256 hex |
+| `expires_at` | TEXT | ISO-8601, 30d |
+| `ip` | TEXT | nullable |
+| `user_agent` | TEXT | nullable |
+| `created_at` | TEXT | ISO-8601 |
+
+## Table: `webauthn_credentials`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | TEXT PK | `wac_...` |
+| `user_id` | TEXT FK | owner |
+| `credential_id` | TEXT UNIQUE | base64url |
+| `public_key` | TEXT | base64url |
+| `counter` | INTEGER | signature counter |
+| `transports` | TEXT JSON | nullable |
+| `name` | TEXT | nullable |
+| `created_at` | TEXT | ISO-8601 |
+| `last_used_at` | TEXT | nullable |
+
+## Table: `admin_audit_log`
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | TEXT PK | `aud_...` |
+| `user_id` | TEXT FK nullable | actor |
+| `action` | TEXT | `chatbot.create` etc |
+| `target_type` | TEXT | nullable |
+| `target_id` | TEXT | nullable |
+| `ip` | TEXT | nullable |
+| `user_agent` | TEXT | nullable |
+| `details` | TEXT JSON | nullable |
+| `created_at` | TEXT | ISO-8601 |
+
+## Indexes & PRAGMAs (perf)
+
+- `idx_conversations_chatbot (chatbot_id)`
+- `idx_messages_conversation (conversation_id, created_at)` — powers `recentMessages(... LIMIT 20)` for context window
+- `idx_admin_sessions_token (token_hash)`, `idx_webauthn_user (user_id)`, `idx_audit_created (created_at)`
+
+On open (`src/db.js:10`): `PRAGMA journal_mode=WAL; foreign_keys=ON; busy_timeout=5000; synchronous=NORMAL; cache_size=-64000 (64MiB); temp_store=MEMORY; mmap_size=256M`. Cached prepared statements per service (`src/services/conversations.js:3`, `chatbots.js:62`, `settings.js:12`) + `BEGIN IMMEDIATE` transactions for `addMessage`/`captureLead` keep the event loop unblocked (embed load 7-10ms, TTFB 6ms). Rate-limit `Map` is swept every 30s / hard-capped at 1500 entries (`src/ratelimit.js:8`).
+
+`GET /embed.js` is `public, max-age=600, stale-while-revalidate=60` cacheable (`src/routes/public.js:34`); chat `POST .../messages/stream` flushes `meta` immediately then streams `token` events.
 
 ## Migration approach
 

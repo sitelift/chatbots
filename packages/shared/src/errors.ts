@@ -1,0 +1,10 @@
+export const errorCodes = {
+  NOT_FOUND: 'NOT_FOUND',
+  INVALID_CONTENT: 'INVALID_CONTENT',
+  TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+  FORBIDDEN_ORIGIN: 'FORBIDDEN_ORIGIN',
+  AI_KEY_NOT_CONFIGURED: 'AI_KEY_NOT_CONFIGURED',
+  AI_PROVIDER_ERROR: 'AI_PROVIDER_ERROR',
+} as const
+
+export type ErrorCode = (typeof errorCodes)[keyof typeof errorCodes]

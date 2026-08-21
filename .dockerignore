@@ -1,5 +1,7 @@
 node_modules
+dist
 data
-.env
 .git
-npm-debug.log*
+.env
+*.md
+.github

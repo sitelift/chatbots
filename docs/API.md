@@ -1,5 +1,7 @@
 # API Reference
 
+> **Status: legacy v1 reference (Express implementation). Pending revision for the v2 architecture — see [ARCHITECTURE.md](ARCHITECTURE.md).**
+
 All endpoints return JSON. This is a design spec; routes will be implemented later.
 
 ## Conventions
@@ -7,7 +9,8 @@ All endpoints return JSON. This is a design spec; routes will be implemented lat
 - **Base URL:** the SiteLift server, e.g. `https://chat.example.com`.
 - **Content type:** `application/json` for request bodies and responses.
 - **Public routes** require no auth.
-- **Admin routes** require auth only if `ADMIN_TOKEN` is set (see [SECURITY.md](SECURITY.md) for the exact header/token semantics).
+- **Auth routes** (`/api/auth/*`) are rate-limited (5/15min). `POST /setup` only when no users exist.
+- **Admin routes** require cookie session (`sitelift_session`, `credentials:include`) + CSRF; legacy `ADMIN_TOKEN` only when no users + `ALLOW_ADMIN_TOKEN_FALLBACK=1`.
 - **Errors** use a consistent shape:
 
 ```json
@@ -57,7 +60,7 @@ Returns a chatbot's **public metadata** for the widget.
 
 ### `POST /api/chat/:chatbotId/messages`
 
-Sends a visitor message and returns the AI reply.
+Sends a visitor message and returns the AI reply (non-streaming, fallback).
 
 **Request body**
 
@@ -92,13 +95,80 @@ Sends a visitor message and returns the AI reply.
 | 429 | `TOO_MANY_REQUESTS` | Per-visitor rate limit exceeded (~20 msgs/min; see ARCHITECTURE §7). |
 | 502 | `AI_PROVIDER_ERROR` | The AI provider call failed (see [SECURITY](SECURITY.md) for error handling). |
 
-**Behavior:** creates the conversation if needed, stores the user message, calls the provider, stores the reply, returns it. The provider is called using the **global** API key from `GET /api/admin/settings` (falling back to `OPENAI_API_KEY`); there is no per-chatbot key. `baseUrl` resolves as chatbot's `baseUrl` → settings `baseUrl` → `OPENAI_BASE_URL` → `https://api.openai.com/v1`. Details in [ARCHITECTURE.md](ARCHITECTURE.md) §3.2.
+**Behavior:** creates the conversation if needed, stores the user message, calls the provider **without** `stream:true`, stores the reply, returns it. The provider is called using the **global** API key from `GET /api/admin/settings` (falling back to `OPENAI_API_KEY`); there is no per-chatbot key. `baseUrl` resolves as chatbot's `baseUrl` → settings `baseUrl` → `OPENAI_BASE_URL` → `https://api.openai.com/v1`. Optimistic DB and cached WAL pragmas keep TTFB low. Details in [ARCHITECTURE.md](ARCHITECTURE.md) §3.2.
+
+### `POST /api/chat/:chatbotId/messages/stream`
+
+Streams the AI reply via Server-Sent Events (SSE). **Preferred** by `embed.js` and the admin Test Widget (optimistic UI).
+
+**Request body** — same as `POST /api/chat/:id/messages`:
+
+```json
+{
+  "conversationId": "cv_xyz789",
+  "visitorId": "v_88dK2...",
+  "content": "What are your hours?"
+}
+```
+
+**200 `text/event-stream`** — sequence of SSE events (each `event:` + `data: JSON` + blank line):
+
+| Event | Data | When |
+| --- | --- | --- |
+| `meta` | `{"conversationId":"cv_...","messageId":"msg_..."}` | Immediate — TTFB 6-10ms. Client stores `conversationId` and shows streaming bubble. |
+| `token` | `{"text":" ..."}` | One per provider `delta.content` chunk. Widget appends to bubble; Test Widget shows `TTFB` + char count. |
+| `done` | `{"conversationId":"cv_...","messageId":"msg_...","reply":"full text"}` | After provider `[DONE]`; server has Persisted assistant row in single `WAL` transaction. |
+| `error` | `{"code":"AI_PROVIDER_ERROR","message":"..."}` | Provider failure after headers; client shows error bubble. |
+
+**Headers:** `Content-Type: text/event-stream`, `Cache-Control: no-cache, no-transform`, `Connection: keep-alive`, `X-Accel-Buffering: no`; CORS `*` (like other public routes). Client should `Accept: text/event-stream`.
+
+**Fallback:** if the client lacks `ReadableStream` or gets `404` (old server), retry `POST /api/chat/:id/messages`.
+
+**Errors before streaming:** if validation/rate-limit/auth fails before SSE headers, returns normal JSON error (e.g., `429 TOO_MANY_REQUESTS`) with same codes as above — client should handle non-`text/event-stream` response as error.
+
+**Behavior:** same as non-stream for steps 1-7, but step 8 flushes `meta` immediately, step 9 calls provider with `stream:true` and proxies tokens live, step 11 persists the full reply. `GET /embed.js` and the Test Widget both prefer this endpoint.
+
+---
+
+## Auth
+
+### `GET /api/auth/status`
+
+Returns `{ hasUsers: bool, user: {id,email,name,role} | null }`.
+
+### `POST /api/auth/setup`
+
+Creates the first owner. Only when `admin_users` is empty. Body `{ email, password (≥8), name? }` → 201 + sets cookie. 403 if already set up.
+
+### `POST /api/auth/login`
+
+Body `{ email, password }` → sets `sitelift_session` cookie. 401 on bad creds, 429 on rate limit.
+
+### `POST /api/auth/logout`
+
+Clears cookie. Always 200.
+
+### `GET /api/auth/me`
+
+Returns current user. 401 if not authed.
+
+### `POST /api/auth/webauthn/register/options` · `POST /api/auth/webauthn/register/verify`
+
+Authenticated. Create a passkey for the current user. Uses `simplewebauthn`.
+
+### `POST /api/auth/webauthn/login/options` · `POST /api/auth/webauthn/login/verify`
+
+Unauthenticated (rate-limited). Body `{ email? }` for options, then WebAuthn assertion to verify → sets cookie.
+
+### `GET /api/auth/webauthn/credentials` · `DELETE /api/auth/webauthn/credentials/:id`
+
+Authenticated. Manage own passkeys.
 
 ---
 
 ## Admin
 
-Auth note: the endpoints below require `Authorization: Bearer <ADMIN_TOKEN>` **only if** `ADMIN_TOKEN` is configured. When empty, they are unauthenticated (single global admin).
+Auth: cookie session (`sitelift_session`) required (see above). All below return 401 if unauthenticated.
 
 ### `GET /api/admin/chatbots`
 

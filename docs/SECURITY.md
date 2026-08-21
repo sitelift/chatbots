@@ -1,5 +1,7 @@
 # Security
 
+> **Status: legacy v1 reference (Express implementation). Pending revision for the v2 architecture — see [ARCHITECTURE.md](ARCHITECTURE.md).**
+
 This document covers how SiteLift Chatbots protects secrets, its threat model, and how to deploy it safely. It is a design spec.
 
 ## Guiding principle
@@ -34,17 +36,17 @@ There is **one global AI-provider API key** for the whole server, shared by all 
 
 ### Admin dashboard / admin API
 
-- The project has **one admin and no login system** by design.
-- Two supported ways to protect the admin surface:
-  1. **Bind to localhost + reverse proxy** (recommended): run the server on `127.0.0.1` behind a reverse proxy (Caddy/nginx) that adds authentication, or
-  2. **`ADMIN_TOKEN`**: if set, every admin endpoint requires `Authorization: Bearer <ADMIN_TOKEN>` (also accepted as `?token=` for the dashboard page). Unauthenticated admin requests return `401`.
+- Admin auth is **email + password (scrypt)** or **passkey (WebAuthn)** with `httpOnly` cookie sessions (`sitelift_session`). First owner is created via `POST /api/auth/setup` or `/admin/login?setup=1`.
+- Sessions are hashed (SHA-256) in SQLite (`admin_sessions`), 30-day TTL with sliding expiration, CSRF-checked via `Origin`/`Referer`.
+- Auth endpoints are rate-limited: 5 attempts / 15 min per IP.
+- Legacy `ADMIN_TOKEN` is **deprecated** — only honored when **no users exist** and `ALLOW_ADMIN_TOKEN_FALLBACK=1` (migration aid). New installs should leave it empty.
 
 The settings endpoints (`GET`/`PUT /api/admin/settings`) are admin-gated like all other admin routes.
 
 ### Public chat / embed
 
 - Intentionally unauthenticated — the widget runs on arbitrary third-party sites.
-- This means **anyone can send chat messages** to a chatbot. Cost/abuse controls are out of scope for v1 (see ARCHITECTURE non-goals).
+- This means **anyone can send chat messages** to a chatbot. Abuse controls live in ARCHITECTURE §7.
 
 ## 3. Threat model
 
@@ -57,14 +59,13 @@ The settings endpoints (`GET`/`PUT /api/admin/settings`) are admin-gated like al
 | Attacker guesses/enumerates chatbot ids | Ids are long random strings (unguessable), but are still public once embedded. They are **not** a security boundary — treat them as public identifiers. |
 | Prompt injection via visitor content | The system prompt instructs the model to stay in role and ignore attempts to reveal the system prompt or instructions. (This is a best-effort mitigation; no prompt is foolproof.) |
 | XSS in the widget from AI replies | The widget renders AI text as plain text, never as HTML, and does not use `innerHTML` with model output. Escape all output. |
-| CORS abuse | Public routes allow any origin (required for embedding). Admin routes restrict `Origin` / require the token. |
+| CORS abuse | Public routes allow `*` (embedding). Admin/auth routes reflect `Origin` with `Allow-Credentials` and enforce CSRF checks. |
 | Provider returns errors | Errors are returned as generic `502 AI_PROVIDER_ERROR` to the client; details logged server-side. |
 
 ### Website import (`POST /api/admin/chatbots/:chatbotId/scrape`)
 
-- The scrape endpoint is **admin-only** (gated by `ADMIN_TOKEN`), so unauthenticated users cannot reach it.
-- Because it fetches an arbitrary URL server-side, it can be abused for **SSRF** against internal URLs (e.g. `http://127.0.0.1`, cloud metadata endpoints). It accepts any `http(s)` URL.
-- Mitigations: it is already admin-gated by `ADMIN_TOKEN`, and the admin should only import **trusted public sites**. Do not expose the admin surface to the internet without a token (see §2 and §4).
+- The scrape endpoint is **admin-only** (cookie session), so unauthenticated users cannot reach it.
+- Because it fetches an arbitrary URL server-side, it is **SSRF-filtered**: `localhost`, `127.0.0.1`, `10./192.168./172.16-31.`, `169.254.169.254`, and `.internal` hosts are blocked, plus non-standard private ports.
 
 ## 4. Deployment hardening checklist
 
@@ -75,7 +76,7 @@ The settings endpoints (`GET`/`PUT /api/admin/settings`) are admin-gated like al
 - Restrict file permissions on `data/` and `.env` (e.g. `600`).
 - Terminate TLS at a reverse proxy (Caddy/nginx) in front of the container; never serve plain HTTP to the public internet.
 - Generate `ENCRYPTION_KEY` with `openssl rand -base64 32`; store it in a secrets manager or a git-ignored `.env`.
-- If the dashboard is reachable on the public internet, set `ADMIN_TOKEN` **and** prefer binding the admin surface to localhost behind the proxy.
+- If the dashboard is reachable on the public internet, create an owner account and prefer binding to localhost behind the proxy (do not rely on `ADMIN_TOKEN`).
 - Enable the AI provider's own cost/rate limits to cap abuse (in addition to SiteLift's built-in limits).
 - Take regular backups of the DB volume. If backing up offsite, keep `ENCRYPTION_KEY` out of the same backup.
 - Rotate `ENCRYPTION_KEY` and re-encrypt keys with a documented procedure (note: re-encryption requires access to all plaintext keys or a re-entry of keys via the dashboard).
@@ -87,13 +88,13 @@ See `.env.example` for all values. Security-relevant ones:
 | Variable | Purpose | Example |
 | --- | --- | --- |
 | `ENCRYPTION_KEY` | 32-byte AES key (base64) for encrypting stored API keys. | `openssl rand -base64 32` |
-| `ADMIN_TOKEN` | Optional bearer token guarding admin routes. | long random string |
 | `HOST` | Bind address. `127.0.0.1` recommended behind a proxy. | `127.0.0.1` |
 | `DATABASE_PATH` | SQLite file path. | `data/sitelift.db` |
+| `SESSION_TTL_MS` | Session lifetime (default 30d). | `2592000000` |
+| `ADMIN_TOKEN` | Deprecated legacy fallback. | — |
 
-## 6. What is intentionally NOT in scope for v1
+## 6. What is intentionally NOT in scope
 
-- Full user auth / multi-tenancy (single admin by design).
-- Per-IP rate limiting, daily per-chatbot budgets, or abuse flags (v1 has a minimal per-visitor rate limit only — see ARCHITECTURE §7).
+- Multi-tenancy / per-chatbot ACL (single owner role today).
+- Per-IP rate limiting, daily per-chatbot budgets (beyond auth + visitor limits).
 - Key vault integration.
-- Audit logging of admin actions.

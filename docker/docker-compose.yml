@@ -1,0 +1,23 @@
+services:
+  sitelift:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      PORT: ${PORT:-3000}
+      HOST: 0.0.0.0
+      DATABASE_PATH: /app/data/sitelift.db
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      AI_MODEL: ${AI_MODEL:-}
+    volumes:
+      - sitelift-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  sitelift-data:
