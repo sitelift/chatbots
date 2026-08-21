@@ -1,6 +1,6 @@
-import { Check, KeyRound, LoaderCircle, Lock, ShieldCheck } from 'lucide-react'
+import { Check, KeyRound, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { type AdminApiError, apiFetch, getAdminToken, setAdminToken } from '../lib/api'
+import { type AdminApiError, apiFetch } from '../lib/api'
 
 interface SettingsView {
   hasKey: boolean
@@ -15,9 +15,6 @@ const inputClass =
 
 export function SettingsPage() {
   const [view, setView] = useState<SettingsView | null>(null)
-  const [needsToken, setNeedsToken] = useState(false)
-  const [tokenInput, setTokenInput] = useState('')
-  const [tokenError, setTokenError] = useState('')
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [baseUrlInput, setBaseUrlInput] = useState('')
   const [replacing, setReplacing] = useState(false)
@@ -26,37 +23,19 @@ export function SettingsPage() {
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    setError('')
     try {
       const data = await apiFetch<SettingsView>('/api/admin/settings')
       setView(data)
       setBaseUrlInput(data.baseUrl)
-      setNeedsToken(false)
     } catch (err) {
       const api = (err as Error & { api?: AdminApiError }).api
-      if (api?.status === 401) {
-        setNeedsToken(true)
-        if (getAdminToken()) setTokenError('That token does not match ADMIN_TOKEN.')
-      } else if (api?.status === 503) {
-        setNeedsToken(true)
-        setTokenError('ADMIN_TOKEN is not set on the server — add it to .env first.')
-      } else {
-        setError(api?.message ?? 'Failed to load settings')
-      }
+      setError(api?.message ?? 'Failed to load settings')
     }
   }, [])
 
   useEffect(() => {
     void load()
   }, [load])
-
-  function unlock(e: React.FormEvent) {
-    e.preventDefault()
-    setTokenError('')
-    setAdminToken(tokenInput.trim())
-    setTokenInput('')
-    void load()
-  }
 
   async function save() {
     setSaving(true)
@@ -80,43 +59,6 @@ export function SettingsPage() {
     } finally {
       setSaving(false)
     }
-  }
-
-  if (needsToken) {
-    return (
-      <div className="mx-auto flex max-w-md flex-col px-6 pt-24">
-        <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <div className="grid size-10 place-items-center rounded-full bg-primary/10">
-            <Lock className="size-4.5 text-primary" />
-          </div>
-          <h1 className="mt-4 text-lg font-semibold tracking-tight">Admin access</h1>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-            Paste the{' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">ADMIN_TOKEN</code> from
-            your server's{' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">.env</code> file. It is
-            stored only in this browser.
-          </p>
-          <form className="mt-5 flex gap-2" onSubmit={unlock}>
-            <input
-              data-autofocus
-              type="password"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              placeholder="Admin token"
-              className={inputClass}
-            />
-            <button
-              type="submit"
-              className="shrink-0 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              Unlock
-            </button>
-          </form>
-          {tokenError && <p className="mt-2.5 text-sm text-destructive">{tokenError}</p>}
-        </div>
-      </div>
-    )
   }
 
   const connected = view?.hasKey ?? false

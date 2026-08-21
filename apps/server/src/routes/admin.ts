@@ -7,12 +7,9 @@ import { getAdminSettingsView, SettingsError, saveApiKey, saveBaseUrl } from '..
 export function requireAdminToken(): MiddlewareHandler {
   return async (c, next) => {
     if (!env.adminToken) {
-      return c.json(
-        {
-          error: { code: 'ADMIN_NOT_CONFIGURED', message: 'Set ADMIN_TOKEN to use the admin API' },
-        },
-        503,
-      )
+      logger.warn('admin API reached while ADMIN_TOKEN is unset — allowing (interim, pre-M1 auth)')
+      await next()
+      return
     }
     const auth = c.req.header('Authorization')
     if (auth !== `Bearer ${env.adminToken}`) {
