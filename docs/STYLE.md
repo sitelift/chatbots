@@ -17,7 +17,7 @@ Token values live in [`apps/dashboard/src/styles/globals.css`](../apps/dashboard
 
 ## 2. The DNA — rules that never bend
 
-1. **One accent color.** Indigo (`--primary`). Everything else is zinc neutrals plus semantic green/red/amber used only for meaning (success/error/warning), never decoration.
+1. **Monochrome, always.** SiteLift's own surfaces use no accent color — ink on paper: near-black primary in light mode, near-white in dark mode, grayscale everywhere else. The only permitted hues are **semantic** (success / destructive / warning) because they carry meaning, never decoration. The client-facing widget may adopt the *client's* brand color as a reseller feature, and defaults to ink when none is set.
 2. **Typography does the work.** Hierarchy comes from size and weight — never from boxes, dividers, or color fills.
 3. **Motion ≤200ms in the dashboard.** Ease-out, opacity/transform only. The widget bubble is the one springy exception.
 4. **Borders over shadows.** Flat surfaces; elevation = border + subtle fill. Shadows exist at two levels max.
@@ -26,22 +26,23 @@ Token values live in [`apps/dashboard/src/styles/globals.css`](../apps/dashboard
 
 ## 3. Color system
 
-Base: zinc neutrals (OKLCH). Accent: indigo ~277° hue. Full values in `globals.css`.
+Base: pure zinc neutrals (OKLCH), zero chroma outside semantic states. Primary is **ink** — inverted per mode (near-black in light, near-white in dark). Full values in `globals.css`.
 
 | Role | Token | Usage |
 | --- | --- | --- |
 | Page background / text | `background` / `foreground` | Canvas and default text |
 | Raised surfaces | `card`, `popover` | Cards, dropdowns, dialogs |
-| Accent | `primary` / `primary-foreground` | Primary buttons, active states, links, focus ring, brand moments |
+| Ink (primary) | `primary` / `primary-foreground` | Primary buttons, active nav, focus ring. It is *emphasis through contrast*, not color |
 | Subtle surfaces | `muted` / `muted-foreground` | Secondary text, hover fills, skeletons, metadata |
 | Semantic | `success` · `warning` · `destructive` | Status only: lead captured, paused bot, delete actions |
-| Charts | `chart-1…5` | Fixed series order; never introduce new chart hues |
+| Charts | `chart-1…5` | Grayscale ramp, fixed order — series are separated by lightness, never hue |
 | Lines | `border` / `input` | All borders and input strokes |
 
 Rules:
 
 - Never hardcode hex/oklch in components — tokens only.
-- Opacity variants of tokens (`primary/10`) are allowed for tints; new hues are not.
+- **Never introduce a new hue.** If something feels like it needs color, the answer is weight, size, or fill — not pigment.
+- Opacity variants of tokens (`primary/10`) are allowed for tints.
 - Text on `muted` backgrounds must use `muted-foreground` minimum contrast (AA).
 
 ## 4. Typography
@@ -104,6 +105,8 @@ Rules:
 ## 9. Widget design language
 
 All widget styles are scoped in Shadow DOM with `--sl-*` prefixed tokens mapped from chatbot config (brand color, name, avatar) — see ARCHITECTURE.md §4.3.
+
+- **Brand color is the client's, not ours.** Defaults to ink (`#18181b`) when unset; agencies set it per client as a white-label feature. Auto-adjust on-brand text lightness for AA.
 
 - **Bubble:** 56px circle, brand accent fill, white icon; bottom-right default; hover scale 1.05 (150ms).
 - **Panel:** 380px wide (100% mobile), max-height 640px, radius `lg`, shadow-lg, header with avatar + name + powered-by slot.

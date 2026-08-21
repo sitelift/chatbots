@@ -198,7 +198,7 @@ class SiteLiftWidget {
     if (!meta) return
     this.meta = meta
 
-    const brand = meta.brandColor || '#4f46e5'
+    const brand = meta.brandColor || '#18181b'
     const onBrand = isColorLight(brand) ? '#18181b' : '#ffffff'
     ;(this.root.host as HTMLElement).style.cssText =
       `position:fixed;z-index:2147483000;--sl-brand:${brand};--sl-on-brand:${onBrand};`

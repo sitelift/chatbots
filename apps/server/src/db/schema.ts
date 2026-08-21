@@ -6,7 +6,7 @@ export const chatbots = sqliteTable('chatbots', {
   name: text('name').notNull(),
   websiteUrl: text('website_url'),
   welcomeMessage: text('welcome_message').notNull().default('Hi! How can I help?'),
-  brandColor: text('brand_color').notNull().default('#4f46e5'),
+  brandColor: text('brand_color').notNull().default('#18181b'),
   avatarUrl: text('avatar_url'),
   quickReplies: text('quick_replies', { mode: 'json' })
     .$type<string[]>()
