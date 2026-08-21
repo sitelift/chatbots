@@ -117,7 +117,7 @@ better-auth manages identity tables (users, sessions, accounts, passkeys). Appli
 | `settings` | encrypted global AI key + hint, base URL, SMTP config, branding, powered-by default |
 | `audit_log` | admin/client actions |
 
-SQLite pragmas and indexes port from v1 (WAL, synchronous=NORMAL, cached prepared statements, indexes on conversation/message lookups). Full schema doc: DATA_MODEL.md (pending v2 revision).
+SQLite pragmas and indexes port from v1 (WAL, synchronous=NORMAL, cached prepared statements, indexes on conversation/message lookups). The full schema lives in `apps/server/src/db/schema.ts` — treat it as the source of truth until a dedicated DATA_MODEL.md is written.
 
 ## 6. Request lifecycles
 
@@ -163,7 +163,7 @@ Owner (role `client`) PUTs new facts via dashboard API → server verifies owner
 - SSRF-filtered scraper (private-range blocking) for the admin-only import.
 - Audit log for sensitive actions; pino logs structured but secret-free.
 
-Details: SECURITY.md (pending v2 revision).
+A dedicated SECURITY.md (threat model, hardening checklist) will be written once auth lands in M1.
 
 ## 9. Deployment
 

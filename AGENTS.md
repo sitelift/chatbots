@@ -2,7 +2,7 @@
 
 You are working on the **SiteLift** project: an open-source, self-hosted AI chatbot platform for **web agencies** running many branded chatbots across client websites. Each chatbot answers visitors via an OpenAI-compatible API with business facts embedded in the system prompt. **No vector databases, no embeddings** — knowledge is structured textareas in the dashboard.
 
-**Current status: v2 rebuild underway — Milestone 0 complete.** The monorepo is scaffolded (`apps/server`, `apps/dashboard`, `packages/shared`, `packages/widget`) with the streaming chat loop working end-to-end and tested. The legacy v1 Express code has been removed; port its proven ideas (rate limiting, prompt assembly, encryption scheme) from the v1 docs where still relevant.
+**Current status: v2 rebuild underway — Milestone 0 complete.** The monorepo is scaffolded (`apps/server`, `apps/dashboard`, `packages/shared`, `packages/widget`) with the streaming chat loop working end-to-end and tested. The legacy v1 Express code and its docs have been fully removed; the architecture doc is the single implementation spec.
 
 Before writing any code, read [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (implementation spec) in full.
 
@@ -18,11 +18,6 @@ A web agency self-hosts SiteLift via Docker. From the agency dashboard they crea
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | **Product contract**: positioning, personas, principles, v1 feature set, definition of done | ✅ done |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **Implementation spec**: v2 stack, monorepo layout, components, lifecycles, decisions | ✅ done |
 | [`docs/STYLE.md`](docs/STYLE.md) | **Design contract**: north stars, DNA rules, tokens, component + widget specs, release gate | ✅ done |
-| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Schema details | 🔶 legacy — revise during rebuild |
-| [`docs/API.md`](docs/API.md) | REST reference | 🔶 legacy — revise during rebuild |
-| [`docs/EMBED.md`](docs/EMBED.md) | Widget install guide | 🔶 legacy — revise during rebuild |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, hardening | 🔶 legacy — revise during rebuild |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Docker deployment guide | 🔶 legacy — revise during rebuild |
 
 ## Settled decisions
 
@@ -52,7 +47,7 @@ RAG/embeddings/runtime retrieval · webhooks/Zapier · live human takeover inbox
 ## Working rules for AI assistants
 
 - **Docs are the source of truth.** Update the relevant doc in the same change as any behavior change. Move items between "settled" and "open" only when explicitly agreed with the user.
-- New code goes in the monorepo layout (`apps/`, `packages/`) in TypeScript strict mode. Do not extend the legacy Express codebase except to port logic out of it.
+- New code goes in the monorepo layout (`apps/`, `packages/`) in TypeScript strict mode. There is no legacy codebase — do not reintroduce Express-era patterns or env vars (e.g. ADMIN_TOKEN as a UI concept).
 - Style bar: surfaces must meet [`docs/STYLE.md`](docs/STYLE.md) — tokens only, both color modes, all states designed. Ugly-but-working is not done.
 - Never add code comments unless asked; never commit unless the user asks.
 - Follow repo conventions (Biome formatting, Vitest tests, Zod-validated boundaries).

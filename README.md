@@ -58,11 +58,6 @@ Widget renders tokens live; lead captured → email to owner
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | Positioning, personas, principles, full v1 feature set, definition of done | ✅ current |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | V2 implementation spec: stack, monorepo layout, components, lifecycles | ✅ current |
 | [`docs/STYLE.md`](docs/STYLE.md) | Design contract: north stars, tokens, component + widget specs, style release gate | ✅ current |
-| [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | SQLite schema details | 🔶 legacy v1 — pending revision |
-| [`docs/API.md`](docs/API.md) | REST API reference | 🔶 legacy v1 — pending revision |
-| [`docs/EMBED.md`](docs/EMBED.md) | Widget install guide | 🔶 legacy v1 — pending revision |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Key protection, threat model, hardening | 🔶 legacy v1 — pending revision |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Docker deployment guide | 🔶 legacy v1 — pending revision |
 | [`AGENTS.md`](AGENTS.md) | Guide for AI coding assistants | ✅ current |
 
 ## Decisions (settled)
