@@ -664,8 +664,8 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
                     <li className="px-3 py-3 text-sm text-destructive">{modelsError}</li>
                   )}
                   {modelsLoading &&
-                    Array.from({ length: 5 }).map((_, i) => (
-                      <li key={`skeleton-${i}`} className="px-3 py-2.5">
+                    ['a', 'b', 'c', 'd', 'e'].map((id) => (
+                      <li key={id} className="px-3 py-2.5">
                         <div className="h-4 w-40 animate-pulse rounded bg-muted" />
                         <div className="mt-1.5 h-3 w-56 animate-pulse rounded bg-muted" />
                       </li>
