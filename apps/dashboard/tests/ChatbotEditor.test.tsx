@@ -105,11 +105,39 @@ describe('ChatbotEditor', () => {
   it('browses models from the global provider when no per-bot override exists', async () => {
     const fetchMock = stubFetch([
       { status: 200, body: view({ baseUrl: null }) },
-      { status: 200, body: { hasKey: true, keyHint: '', keySource: 'settings', baseUrl: 'https://openrouter.ai/api/v1', encryptionAvailable: true } },
-      { status: 200, body: { models: [{ id: 'or-model', name: 'OR Model', contextLength: 64000, promptPricePerM: 0.15, completionPricePerM: 0.6 }] } },
+      {
+        status: 200,
+        body: {
+          hasKey: true,
+          keyHint: '',
+          keySource: 'settings',
+          baseUrl: 'https://openrouter.ai/api/v1',
+          encryptionAvailable: true,
+        },
+      },
+      {
+        status: 200,
+        body: {
+          models: [
+            {
+              id: 'or-model',
+              name: 'OR Model',
+              contextLength: 64000,
+              promptPricePerM: 0.15,
+              completionPricePerM: 0.6,
+            },
+          ],
+        },
+      },
     ])
     render(
-      <ChatbotEditor botId="ch_edit1" onBack={() => {}} onSaved={() => {}} onDeleted={() => {}} onPlayground={() => {}} />,
+      <ChatbotEditor
+        botId="ch_edit1"
+        onBack={() => {}}
+        onSaved={() => {}}
+        onDeleted={() => {}}
+        onPlayground={() => {}}
+      />,
     )
     await screen.findByLabelText('Name')
 
@@ -118,7 +146,9 @@ describe('ChatbotEditor', () => {
     await waitFor(() => {
       expect(screen.getByText('OR Model')).toBeDefined()
     })
-    const catalogCall = fetchMock.mock.calls.find(([path]) => String(path).startsWith('/api/admin/models'))
+    const catalogCall = fetchMock.mock.calls.find(([path]) =>
+      String(path).startsWith('/api/admin/models'),
+    )
     expect(catalogCall?.[0]).toBe(
       `/api/admin/models?baseUrl=${encodeURIComponent('https://openrouter.ai/api/v1')}`,
     )
