@@ -9,9 +9,7 @@ import {
 import { ArrowLeft, Check, ChevronDown, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type AdminApiError, apiFetch } from '../lib/api'
-
-const inputClass =
-  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25'
+import { inputClass, labelClass, textareaClass } from '../lib/ui'
 
 interface EditorProps {
   botId: string
@@ -369,50 +367,81 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
       <div className="mt-6 space-y-5">
         <section className="rounded-xl border bg-card p-5 shadow-sm">
           <h2 className="text-base font-medium">Basics</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="ed-name" className="text-sm font-medium">
-                Name
-              </label>
-              <input
-                id="ed-name"
-                type="text"
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-                className={`${inputClass} mt-1.5`}
-              />
+          <p className="mt-1 text-[13px] text-muted-foreground">Identity and widget behavior.</p>
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="ed-name" className={labelClass}>
+                  Name
+                </label>
+                <input
+                  id="ed-name"
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => set('name', e.target.value)}
+                  className={`${inputClass} mt-1.5`}
+                />
+              </div>
+              <div>
+                <label htmlFor="ed-url" className={labelClass}>
+                  Website URL
+                </label>
+                <input
+                  id="ed-url"
+                  type="url"
+                  value={form.websiteUrl}
+                  onChange={(e) => set('websiteUrl', e.target.value)}
+                  placeholder="https://acme.com"
+                  className={`${inputClass} mt-1.5`}
+                />
+              </div>
             </div>
-            <div>
-              <label htmlFor="ed-url" className="text-sm font-medium">
-                Website URL
-              </label>
-              <input
-                id="ed-url"
-                type="url"
-                value={form.websiteUrl}
-                onChange={(e) => set('websiteUrl', e.target.value)}
-                placeholder="https://acme.com"
-                className={`${inputClass} mt-1.5`}
-              />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <span className={labelClass}>Brand color</span>
+                <div className="relative mt-1.5">
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute left-1.5 top-1/2 size-6 -translate-y-1/2 rounded-[5px] border border-black/20 dark:border-white/25"
+                    style={{ backgroundColor: form.brandColor }}
+                  />
+                  <input
+                    readOnly
+                    aria-label="Brand color hex value"
+                    value={form.brandColor.toUpperCase()}
+                    className={`${inputClass} pl-9 font-mono uppercase`}
+                  />
+                  <input
+                    type="color"
+                    value={form.brandColor}
+                    onChange={(e) => set('brandColor', e.target.value)}
+                    aria-label="Pick brand color"
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="ed-welcome" className={labelClass}>
+                  Welcome message
+                </label>
+                <input
+                  id="ed-welcome"
+                  type="text"
+                  value={form.welcomeMessage}
+                  onChange={(e) => set('welcomeMessage', e.target.value)}
+                  placeholder="Hi! How can I help?"
+                  className={`${inputClass} mt-1.5`}
+                />
+              </div>
             </div>
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]">
+
             <div>
-              <label htmlFor="ed-color" className="text-sm font-medium">
-                Brand color
-              </label>
-              <input
-                id="ed-color"
-                type="color"
-                value={form.brandColor}
-                onChange={(e) => set('brandColor', e.target.value)}
-                className="mt-1.5 h-9 w-full cursor-pointer rounded-md border border-input bg-background p-1"
-              />
-            </div>
-            <div>
-              <label htmlFor="ed-domains" className="text-sm font-medium">
+              <label htmlFor="ed-domains" className={labelClass}>
                 Allowed domains{' '}
-                <span className="font-normal text-muted-foreground">· comma separated</span>
+                <span className="font-normal text-muted-foreground/80">
+                  · widget only answers here
+                </span>
               </label>
               <input
                 id="ed-domains"
@@ -423,23 +452,11 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
                 className={`${inputClass} mt-1.5 font-mono`}
               />
             </div>
-          </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+
             <div>
-              <label htmlFor="ed-welcome" className="text-sm font-medium">
-                Welcome message
-              </label>
-              <input
-                id="ed-welcome"
-                type="text"
-                value={form.welcomeMessage}
-                onChange={(e) => set('welcomeMessage', e.target.value)}
-                className={`${inputClass} mt-1.5`}
-              />
-            </div>
-            <div>
-              <label htmlFor="ed-chips" className="text-sm font-medium">
-                Quick replies <span className="font-normal text-muted-foreground">· up to 6</span>
+              <label htmlFor="ed-chips" className={labelClass}>
+                Quick replies{' '}
+                <span className="font-normal text-muted-foreground/80">· up to 6</span>
               </label>
               <input
                 id="ed-chips"
@@ -517,7 +534,7 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
 
               <div>
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">FAQ pairs</div>
+                  <div className={labelClass}>FAQ pairs</div>
                   <button
                     type="button"
                     onClick={addFaq}
@@ -779,7 +796,7 @@ interface FactFieldProps {
 function FactField({ id, label, value, onChange, placeholder, rows = 3 }: FactFieldProps) {
   return (
     <div>
-      <label htmlFor={id} className="text-sm font-medium">
+      <label htmlFor={id} className={labelClass}>
         {label}
       </label>
       <textarea
@@ -788,7 +805,7 @@ function FactField({ id, label, value, onChange, placeholder, rows = 3 }: FactFi
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`${inputClass} mt-1.5 resize-y leading-relaxed`}
+        className={`${textareaClass} mt-1.5`}
       />
     </div>
   )

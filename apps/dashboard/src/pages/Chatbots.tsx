@@ -2,9 +2,7 @@ import { type ChatbotAdminView, chatbotInputSchema } from '@sitelift/shared'
 import { Bot, LoaderCircle, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { type AdminApiError, apiFetch } from '../lib/api'
-
-const inputClass =
-  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25'
+import { inputClass, labelClass } from '../lib/ui'
 
 function StatusBadge({ status }: { status: ChatbotAdminView['status'] }) {
   const styles = {
@@ -78,7 +76,7 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
     <form onSubmit={submit} className="space-y-5 border-b bg-muted/30 px-5 py-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="bot-name" className="text-sm font-medium">
+          <label htmlFor="bot-name" className={labelClass}>
             Name
           </label>
           <input
@@ -92,7 +90,7 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
           />
         </div>
         <div>
-          <label htmlFor="bot-url" className="text-sm font-medium">
+          <label htmlFor="bot-url" className={labelClass}>
             Website URL <span className="font-normal text-muted-foreground">· optional</span>
           </label>
           <input
@@ -107,7 +105,7 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
       </div>
 
       <div>
-        <label htmlFor="bot-welcome" className="text-sm font-medium">
+        <label htmlFor="bot-welcome" className={labelClass}>
           Welcome message <span className="font-normal text-muted-foreground">· optional</span>
         </label>
         <input
@@ -122,7 +120,7 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
 
       <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
         <div>
-          <label htmlFor="bot-color" className="text-sm font-medium">
+          <label htmlFor="bot-color" className={labelClass}>
             Brand color
           </label>
           <input
@@ -134,7 +132,7 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
           />
         </div>
         <div>
-          <label htmlFor="bot-domains" className="text-sm font-medium">
+          <label htmlFor="bot-domains" className={labelClass}>
             Allowed domains{' '}
             <span className="font-normal text-muted-foreground">· comma separated</span>
           </label>
@@ -150,7 +148,7 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
       </div>
 
       <div>
-        <label htmlFor="bot-prompt" className="text-sm font-medium">
+        <label htmlFor="bot-prompt" className={labelClass}>
           Business facts{' '}
           <span className="font-normal text-muted-foreground">· the system prompt</span>
         </label>

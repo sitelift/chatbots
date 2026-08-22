@@ -1,9 +1,7 @@
 import { Bot, LoaderCircle } from 'lucide-react'
 import { useState } from 'react'
 import { authClient } from '../lib/auth-client'
-
-const inputClass =
-  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25'
+import { inputClass, labelClass } from '../lib/ui'
 
 export function LoginPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
@@ -59,7 +57,7 @@ export function LoginPage() {
           <form onSubmit={submit} className="mt-5 space-y-4">
             {mode === 'signup' && (
               <div>
-                <label htmlFor="name" className="text-sm font-medium">
+                <label htmlFor="name" className={labelClass}>
                   Name
                 </label>
                 <input
@@ -74,7 +72,7 @@ export function LoginPage() {
               </div>
             )}
             <div>
-              <label htmlFor="email" className="text-sm font-medium">
+              <label htmlFor="email" className={labelClass}>
                 Email
               </label>
               <input
@@ -89,7 +87,7 @@ export function LoginPage() {
               />
             </div>
             <div>
-              <label htmlFor="password" className="text-sm font-medium">
+              <label htmlFor="password" className={labelClass}>
                 Password
               </label>
               <input

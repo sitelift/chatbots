@@ -2,6 +2,7 @@ import type { ChatbotAdminView } from '@sitelift/shared'
 import { Check, Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { type AdminApiError, apiFetch } from '../lib/api'
+import { inputClass } from '../lib/ui'
 
 interface PlaygroundProps {
   botId: string
@@ -27,9 +28,6 @@ export function PlaygroundPage({ botId, onBotChange }: PlaygroundProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const selectClass =
-    'w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25'
-
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
       <h1 className="text-3xl font-semibold tracking-tight">Playground</h1>
@@ -46,7 +44,7 @@ export function PlaygroundPage({ botId, onBotChange }: PlaygroundProps) {
             id="pg-bot"
             value={botId}
             onChange={(e) => onBotChange(e.target.value)}
-            className={`${selectClass} mt-1.5 mb-4`}
+            className={`${inputClass} mt-1.5 mb-4`}
           >
             <option value="ch_demo">Demo Business (built-in)</option>
             {bots.map((b) => (

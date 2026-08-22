@@ -73,7 +73,7 @@ export default function App() {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar dark={dark} user={user} onToggleTheme={() => setDark((d) => !d)} />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-muted/20">
           {page === 'overview' && (
             <Overview onNewChatbot={openNewChatbot} onViewChatbots={() => navigate('chatbots')} />
           )}

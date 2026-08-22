@@ -2,6 +2,7 @@ import { PROVIDER_PRESETS, presetForBaseUrl } from '@sitelift/shared'
 import { Check, KeyRound, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { type AdminApiError, apiFetch } from '../lib/api'
+import { inputClass, labelClass } from '../lib/ui'
 
 interface SettingsView {
   hasKey: boolean
@@ -10,9 +11,6 @@ interface SettingsView {
   baseUrl: string
   encryptionAvailable: boolean
 }
-
-const inputClass =
-  'w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25'
 
 export function SettingsPage() {
   const [view, setView] = useState<SettingsView | null>(null)
@@ -93,7 +91,7 @@ export function SettingsPage() {
 
         <div className="space-y-6 px-5 py-6">
           <div>
-            <label htmlFor="apikey" className="text-sm font-medium">
+            <label htmlFor="apikey" className={labelClass}>
               API key
             </label>
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
@@ -125,7 +123,7 @@ export function SettingsPage() {
           </div>
 
           <div className="border-t pt-5">
-            <div className="text-sm font-medium">Provider</div>
+            <div className={labelClass}>Provider</div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {PROVIDER_PRESETS.map((p) => {
                 const selected =
