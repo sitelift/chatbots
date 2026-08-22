@@ -15,6 +15,7 @@ A web agency self-hosts SiteLift via Docker. From the agency dashboard they crea
 | Document | What it covers | Status |
 | --- | --- | --- |
 | [`README.md`](README.md) | Overview, principles, quick flow, doc index | ✅ current |
+| [`PROGRESS.md`](PROGRESS.md) | **Living handoff**: what's done, what's next, env/gotchas — update at every stable point | ✅ keep fresh |
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | **Product contract**: positioning, personas, principles, v1 feature set, definition of done | ✅ done |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **Implementation spec**: v2 stack, monorepo layout, components, lifecycles, decisions | ✅ done |
 | [`docs/STYLE.md`](docs/STYLE.md) | **Design contract**: north stars, DNA rules, tokens, component + widget specs, release gate | ✅ done |
@@ -46,6 +47,7 @@ RAG/embeddings/runtime retrieval · webhooks/Zapier · live human takeover inbox
 
 ## Working rules for AI assistants
 
+- **Keep PROGRESS.md fresh** — update it (snapshot, roadmap, gotchas, commit trail) at every stable point so other sessions/devices can continue cold.
 - **Docs are the source of truth.** Update the relevant doc in the same change as any behavior change. Move items between "settled" and "open" only when explicitly agreed with the user.
 - New code goes in the monorepo layout (`apps/`, `packages/`) in TypeScript strict mode. There is no legacy codebase — do not reintroduce Express-era patterns or env vars (e.g. ADMIN_TOKEN as a UI concept).
 - Style bar: surfaces must meet [`docs/STYLE.md`](docs/STYLE.md) — tokens only, both color modes, all states designed. Ugly-but-working is not done.

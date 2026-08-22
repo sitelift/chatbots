@@ -55,6 +55,7 @@ Widget renders tokens live; lead captured → email to owner
 
 | Document | What it covers | Status |
 | --- | --- | --- |
+| [`PROGRESS.md`](PROGRESS.md) | **Living handoff doc**: status snapshot, done/deferred, roadmap, gotchas | ✅ current |
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | Positioning, personas, principles, full v1 feature set, definition of done | ✅ current |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | V2 implementation spec: stack, monorepo layout, components, lifecycles | ✅ current |
 | [`docs/STYLE.md`](docs/STYLE.md) | Design contract: north stars, tokens, component + widget specs, style release gate | ✅ current |
