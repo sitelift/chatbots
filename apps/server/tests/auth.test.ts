@@ -74,9 +74,13 @@ describe('chatbot CRUD', () => {
       body: JSON.stringify({
         name: 'Acme HVAC',
         websiteUrl: 'https://acme.example',
-        systemPrompt: 'You help Acme customers.',
         allowedDomains: ['acme.example'],
         quickReplies: ['Hours?', 'Pricing?'],
+        facts: {
+          overview: 'Family-owned HVAC in Austin.',
+          hours: 'Mon–Fri 8am–6pm',
+          faqs: [{ q: 'Emergency service?', a: 'Yes, 24/7 for members.' }],
+        },
       }),
     })
     expect(res.status).toBe(201)
@@ -85,6 +89,14 @@ describe('chatbot CRUD', () => {
     expect(view.id).toMatch(/^ch_/)
     expect(view.brandColor).toBe('#18181b')
     expect(view.status).toBe('active')
+    expect(view.facts).toEqual({
+      overview: 'Family-owned HVAC in Austin.',
+      hours: 'Mon–Fri 8am–6pm',
+      faqs: [{ q: 'Emergency service?', a: 'Yes, 24/7 for members.' }],
+    })
+    expect(view.systemPrompt).toContain('BUSINESS OVERVIEW')
+    expect(view.systemPrompt).toContain('Family-owned HVAC in Austin.')
+    expect(view.systemPrompt).toContain('FREQUENTLY ASKED QUESTIONS')
   })
 
   it('lists it, updates it, deletes it', async () => {

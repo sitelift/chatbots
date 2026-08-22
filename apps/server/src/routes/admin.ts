@@ -1,8 +1,10 @@
 import {
+  type BusinessFacts,
   type ChatbotAdminView,
   type ClientUserView,
   chatbotInputSchema,
   clientUserViewSchema,
+  composeSystemPrompt,
 } from '@sitelift/shared'
 import { eq, inArray } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
@@ -35,9 +37,32 @@ function toView(row: typeof chatbots.$inferSelect): ChatbotAdminView {
     maxTokens: row.maxTokens,
     status: row.status,
     allowedDomains: row.allowedDomains,
+    facts: parseFacts(row.factsJson),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
+}
+
+function parseFacts(raw: string | null): BusinessFacts | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as BusinessFacts
+  } catch {
+    return null
+  }
+}
+
+type FactsInput = Partial<z.infer<typeof chatbotInputSchema>>
+
+function resolvePrompt(input: FactsInput): string {
+  if (input.facts) return composeSystemPrompt(input.facts)
+  return input.systemPrompt ?? ''
+}
+
+function serializeFacts(input: FactsInput): string | null | undefined {
+  if (input.facts === null) return null
+  if (input.facts) return JSON.stringify(input.facts)
+  return undefined
 }
 
 function settingsError(c: Context, err: unknown) {
@@ -78,7 +103,8 @@ adminRoutes.post('/chatbots', async (c) => {
     avatarUrl: input.avatarUrl || null,
     quickReplies: input.quickReplies ?? [],
     poweredBy: input.poweredBy ?? true,
-    systemPrompt: input.systemPrompt ?? '',
+    systemPrompt: resolvePrompt(input),
+    factsJson: serializeFacts(input) ?? null,
     model: input.model ?? process.env.AI_MODEL ?? 'gpt-4o-mini',
     baseUrl: input.baseUrl || null,
     temperature: input.temperature ?? 0.7,
@@ -119,7 +145,12 @@ adminRoutes.put('/chatbots/:id', async (c) => {
       400,
     )
   }
-  const patch = { ...parsed.data, updatedAt: new Date() }
+  const patch = {
+    ...parsed.data,
+    systemPrompt: resolvePrompt(parsed.data),
+    factsJson: serializeFacts(parsed.data),
+    updatedAt: new Date(),
+  }
   db.update(chatbots)
     .set({
       ...patch,

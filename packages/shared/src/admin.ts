@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { chatbotStatusSchema } from './chatbot'
+import { businessFactsSchema } from './facts'
 
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/)
 
@@ -18,6 +19,7 @@ export const chatbotInputSchema = z.object({
   maxTokens: z.number().int().min(16).max(4000).optional(),
   allowedDomains: z.array(z.string().min(1)).max(20).optional(),
   status: chatbotStatusSchema.optional(),
+  facts: businessFactsSchema.nullable().optional(),
 })
 
 export type ChatbotInput = z.infer<typeof chatbotInputSchema>
@@ -38,6 +40,7 @@ export const chatbotAdminViewSchema = z.object({
   maxTokens: z.number(),
   status: chatbotStatusSchema,
   allowedDomains: z.array(z.string()),
+  facts: businessFactsSchema.nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

@@ -1,6 +1,13 @@
-import { type ChatbotAdminView, chatbotInputSchema } from '@sitelift/shared'
-import { ArrowLeft, LoaderCircle, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  type BusinessFacts,
+  type ChatbotAdminView,
+  chatbotInputSchema,
+  composeSystemPrompt,
+  type FaqPair,
+  PROVIDER_PRESETS,
+} from '@sitelift/shared'
+import { ArrowLeft, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { type AdminApiError, apiFetch } from '../lib/api'
 
 const inputClass =
@@ -14,6 +21,12 @@ interface EditorProps {
   onPlayground: (id: string) => void
 }
 
+interface EditableFaq extends FaqPair {
+  _key: string
+}
+
+type FactsMode = 'structured' | 'raw'
+
 interface FormState {
   name: string
   websiteUrl: string
@@ -21,7 +34,9 @@ interface FormState {
   brandColor: string
   quickReplies: string
   domains: string
-  systemPrompt: string
+  mode: FactsMode
+  facts: Omit<BusinessFacts, 'faqs'> & { faqs?: EditableFaq[] }
+  rawPrompt: string
   model: string
   baseUrl: string
   temperature: string
@@ -29,7 +44,21 @@ interface FormState {
   poweredBy: boolean
 }
 
+function emptyFacts(): BusinessFacts & { faqs?: never[] } {
+  return { overview: '', hours: '', contact: '', products: '', misc: '', faqs: [] }
+}
+
 function toForm(v: ChatbotAdminView): FormState {
+  const hasStructured =
+    v.facts &&
+    Boolean(
+      v.facts.overview ||
+        v.facts.hours ||
+        v.facts.contact ||
+        v.facts.products ||
+        v.facts.misc ||
+        (v.facts.faqs && v.facts.faqs.length > 0),
+    )
   return {
     name: v.name,
     websiteUrl: v.websiteUrl ?? '',
@@ -37,12 +66,31 @@ function toForm(v: ChatbotAdminView): FormState {
     brandColor: v.brandColor,
     quickReplies: v.quickReplies.join(', '),
     domains: v.allowedDomains.join(', '),
-    systemPrompt: v.systemPrompt,
+    mode: hasStructured ? 'structured' : 'raw',
+    facts: v.facts
+      ? {
+          ...emptyFacts(),
+          ...v.facts,
+          faqs: (v.facts.faqs ?? []).map((f) => ({ ...f, _key: crypto.randomUUID() })),
+        }
+      : emptyFacts(),
+    rawPrompt: hasStructured ? '' : v.systemPrompt,
     model: v.model,
     baseUrl: v.baseUrl ?? '',
     temperature: String(v.temperature),
     maxTokens: String(v.maxTokens),
     poweredBy: v.poweredBy,
+  }
+}
+
+function cleanFacts(facts: BusinessFacts): BusinessFacts {
+  return {
+    overview: facts.overview?.trim() || undefined,
+    hours: facts.hours?.trim() || undefined,
+    contact: facts.contact?.trim() || undefined,
+    products: facts.products?.trim() || undefined,
+    misc: facts.misc?.trim() || undefined,
+    faqs: (facts.faqs ?? []).filter((f) => f.q.trim() && f.a.trim()),
   }
 }
 
@@ -52,6 +100,13 @@ function splitList(value: string): string[] {
     .map((entry) => entry.trim())
     .filter(Boolean)
 }
+
+const FACT_PLACEHOLDERS = {
+  overview: 'Family-owned HVAC company serving Austin since 1998.',
+  hours: 'Mon–Fri 8am–6pm\nSaturday 9am–1pm\nClosed Sundays',
+  contact: 'Phone: (512) 555-0100\nEmail: hello@acme.com\n123 Main St, Austin TX',
+  products: 'AC repair, installation, seasonal tune-ups.\nFree estimates on installs.',
+} as const
 
 export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground }: EditorProps) {
   const [view, setView] = useState<ChatbotAdminView | null>(null)
@@ -83,6 +138,51 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
     setForm((f) => (f ? { ...f, [key]: value } : f))
   }
 
+  function setFact<K extends keyof BusinessFacts>(key: K, value: BusinessFacts[K]) {
+    setForm((f) => (f ? { ...f, facts: { ...f.facts, [key]: value } } : f))
+  }
+
+  function setFaq(index: number, patch: { q?: string; a?: string }) {
+    setForm((f) => {
+      if (!f) return f
+      const faqs = [...(f.facts.faqs ?? [])]
+      const current = faqs[index]
+      if (!current) return f
+      faqs[index] = { q: patch.q ?? current.q, a: patch.a ?? current.a, _key: current._key }
+      return { ...f, facts: { ...f.facts, faqs } }
+    })
+  }
+
+  function addFaq() {
+    setForm((f) =>
+      f
+        ? {
+            ...f,
+            facts: {
+              ...f.facts,
+              faqs: [...(f.facts.faqs ?? []), { q: '', a: '', _key: crypto.randomUUID() }],
+            },
+          }
+        : f,
+    )
+  }
+
+  function removeFaq(index: number) {
+    setForm((f) => {
+      if (!f) return f
+      return {
+        ...f,
+        facts: { ...f.facts, faqs: (f.facts.faqs ?? []).filter((_, i) => i !== index) },
+      }
+    })
+  }
+
+  const preview = useMemo(() => {
+    if (!form) return ''
+    if (form.mode === 'raw') return form.rawPrompt
+    return composeSystemPrompt(cleanFacts(form.facts))
+  }, [form])
+
   async function save() {
     if (!form || !view) return
     setValidationError('')
@@ -90,14 +190,13 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
 
     const temperature = Number.parseFloat(form.temperature)
     const maxTokens = Number.parseInt(form.maxTokens, 10)
-    const payload = {
+    const base = {
       name: form.name.trim(),
       websiteUrl: form.websiteUrl.trim(),
       welcomeMessage: form.welcomeMessage.trim() || view.welcomeMessage,
       brandColor: form.brandColor,
       quickReplies: splitList(form.quickReplies).slice(0, 6),
       poweredBy: form.poweredBy,
-      systemPrompt: form.systemPrompt,
       model: form.model.trim() || view.model,
       baseUrl: form.baseUrl.trim(),
       temperature: Number.isFinite(temperature) ? temperature : view.temperature,
@@ -105,17 +204,27 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
       allowedDomains: splitList(form.domains),
     }
 
+    let payload: Record<string, unknown>
+    if (form.mode === 'structured') {
+      payload = { ...base, facts: cleanFacts(form.facts), systemPrompt: undefined }
+    } else {
+      payload = { ...base, facts: null, systemPrompt: form.rawPrompt }
+    }
+
     const parsed = chatbotInputSchema.safeParse(payload)
     if (!parsed.success) {
       setValidationError(parsed.error.issues[0]?.message ?? 'Invalid input')
       return
     }
+    // drop keys the server must not overwrite
+    delete (parsed.data as Record<string, unknown>).systemPrompt
+    if (form.mode === 'structured') parsed.data.systemPrompt = undefined
 
     setSaving(true)
     try {
       const updated = await apiFetch<ChatbotAdminView>(`/api/admin/chatbots/${botId}`, {
         method: 'PUT',
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify(payload),
       })
       setView(updated)
       setForm(toForm(updated))
@@ -151,13 +260,7 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
   if (loadError) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <button
-          type="button"
-          onClick={onBack}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <ArrowLeft className="size-3.5" /> All chatbots
-        </button>
+        <BackLink onClick={onBack} />
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {loadError}
         </p>
@@ -173,15 +276,13 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
     )
   }
 
+  const allModels = Array.from(
+    new Set(PROVIDER_PRESETS.flatMap((p) => p.models).concat(form.model)),
+  )
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      >
-        <ArrowLeft className="size-3.5" /> All chatbots
-      </button>
+      <BackLink onClick={onBack} />
 
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">{view.name}</h1>
@@ -255,18 +356,6 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
               />
             </div>
           </div>
-          <div className="mt-4">
-            <label htmlFor="ed-welcome" className="text-sm font-medium">
-              Welcome message
-            </label>
-            <input
-              id="ed-welcome"
-              type="text"
-              value={form.welcomeMessage}
-              onChange={(e) => set('welcomeMessage', e.target.value)}
-              className={`${inputClass} mt-1.5`}
-            />
-          </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]">
             <div>
               <label htmlFor="ed-color" className="text-sm font-medium">
@@ -283,9 +372,7 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
             <div>
               <label htmlFor="ed-domains" className="text-sm font-medium">
                 Allowed domains{' '}
-                <span className="font-normal text-muted-foreground">
-                  · comma separated; the widget only answers here
-                </span>
+                <span className="font-normal text-muted-foreground">· comma separated</span>
               </label>
               <input
                 id="ed-domains"
@@ -297,39 +384,174 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
               />
             </div>
           </div>
-          <div className="mt-4">
-            <label htmlFor="ed-chips" className="text-sm font-medium">
-              Quick replies{' '}
-              <span className="font-normal text-muted-foreground">· up to 6, comma separated</span>
-            </label>
-            <input
-              id="ed-chips"
-              type="text"
-              value={form.quickReplies}
-              onChange={(e) => set('quickReplies', e.target.value)}
-              placeholder="Hours?, Pricing?, Book a visit"
-              className={`${inputClass} mt-1.5`}
-            />
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="ed-welcome" className="text-sm font-medium">
+                Welcome message
+              </label>
+              <input
+                id="ed-welcome"
+                type="text"
+                value={form.welcomeMessage}
+                onChange={(e) => set('welcomeMessage', e.target.value)}
+                className={`${inputClass} mt-1.5`}
+              />
+            </div>
+            <div>
+              <label htmlFor="ed-chips" className="text-sm font-medium">
+                Quick replies <span className="font-normal text-muted-foreground">· up to 6</span>
+              </label>
+              <input
+                id="ed-chips"
+                type="text"
+                value={form.quickReplies}
+                onChange={(e) => set('quickReplies', e.target.value)}
+                placeholder="Hours?, Pricing?, Book a visit"
+                className={`${inputClass} mt-1.5`}
+              />
+            </div>
           </div>
         </section>
 
         <section className="rounded-xl border bg-card p-5 shadow-sm">
-          <h2 className="text-base font-medium">Business facts</h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            Everything the AI knows. Written plainly, injected verbatim as the system prompt — no
-            retrieval, no surprises.
-          </p>
-          <textarea
-            id="ed-prompt"
-            aria-label="Business facts"
-            rows={12}
-            value={form.systemPrompt}
-            onChange={(e) => set('systemPrompt', e.target.value)}
-            placeholder={
-              'Family-owned HVAC company in Austin.\nHours: Mon–Fri 8am–6pm.\nEmergency line: (512) 555-0100.\nNever quote prices not listed above.'
-            }
-            className={`${inputClass} mt-3 resize-y leading-relaxed`}
-          />
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-medium">Business facts</h2>
+              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                Everything the AI knows. Filled sections are woven into its instructions — nothing
+                more, nothing invented.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (form.mode === 'structured') {
+                  set('rawPrompt', preview)
+                  set('mode', 'raw')
+                } else {
+                  set('mode', 'structured')
+                }
+              }}
+              className="shrink-0 text-[13px] font-medium text-primary underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {form.mode === 'structured' ? 'Edit as plain prompt' : 'Use guided fields'}
+            </button>
+          </div>
+
+          {form.mode === 'structured' ? (
+            <div className="mt-4 space-y-4">
+              <FactField
+                id="facts-overview"
+                label="Business overview"
+                value={form.facts.overview ?? ''}
+                onChange={(v) => setFact('overview', v)}
+                placeholder={FACT_PLACEHOLDERS.overview}
+                rows={3}
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FactField
+                  id="facts-hours"
+                  label="Hours"
+                  value={form.facts.hours ?? ''}
+                  onChange={(v) => setFact('hours', v)}
+                  placeholder={FACT_PLACEHOLDERS.hours}
+                  rows={3}
+                />
+                <FactField
+                  id="facts-contact"
+                  label="Contact"
+                  value={form.facts.contact ?? ''}
+                  onChange={(v) => setFact('contact', v)}
+                  placeholder={FACT_PLACEHOLDERS.contact}
+                  rows={3}
+                />
+              </div>
+              <FactField
+                id="facts-products"
+                label="Products & services"
+                value={form.facts.products ?? ''}
+                onChange={(v) => setFact('products', v)}
+                placeholder={FACT_PLACEHOLDERS.products}
+                rows={3}
+              />
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">FAQ pairs</div>
+                  <button
+                    type="button"
+                    onClick={addFaq}
+                    disabled={(form.facts.faqs?.length ?? 0) >= 50}
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
+                  >
+                    <Plus className="size-3" /> Add FAQ
+                  </button>
+                </div>
+                {(form.facts.faqs ?? []).length === 0 ? (
+                  <p className="mt-2 text-[13px] text-muted-foreground">
+                    Question → answer pairs. These steer answers hardest.
+                  </p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {(form.facts.faqs ?? []).map((faq, i) => (
+                      <div key={faq._key} className="flex items-start gap-2">
+                        <div className="grid flex-1 gap-1.5 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                          <input
+                            aria-label={`FAQ ${i + 1} question`}
+                            value={faq.q}
+                            onChange={(e) => setFaq(i, { q: e.target.value })}
+                            placeholder="Do you offer emergency service?"
+                            className={`${inputClass} mt-0`}
+                          />
+                          <input
+                            aria-label={`FAQ ${i + 1} answer`}
+                            value={faq.a}
+                            onChange={(e) => setFaq(i, { a: e.target.value })}
+                            placeholder="Yes — 24/7 for maintenance plan members."
+                            className={`${inputClass} mt-0`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFaq(i)}
+                          aria-label={`Remove FAQ ${i + 1}`}
+                          className="mt-1 grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <FactField
+                id="facts-misc"
+                label="Additional notes"
+                value={form.facts.misc ?? ''}
+                onChange={(v) => setFact('misc', v)}
+                placeholder="Service area: within 30 miles of downtown. Spanish spoken."
+                rows={2}
+              />
+
+              <details className="group">
+                <summary className="cursor-pointer list-none text-[13px] font-medium text-primary [&::-webkit-details-marker]:hidden group-open:mb-2">
+                  Preview final prompt
+                </summary>
+                <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+                  {preview || 'Fill in any field to see the assembled prompt.'}
+                </pre>
+              </details>
+            </div>
+          ) : (
+            <textarea
+              aria-label="Raw system prompt"
+              rows={14}
+              value={form.rawPrompt}
+              onChange={(e) => set('rawPrompt', e.target.value)}
+              className={`${inputClass} mt-4 resize-y font-mono leading-relaxed`}
+            />
+          )}
         </section>
 
         <details className="group rounded-xl border bg-card p-5 shadow-sm">
@@ -343,11 +565,17 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
               </label>
               <input
                 id="ed-model"
+                list="model-presets"
                 type="text"
                 value={form.model}
                 onChange={(e) => set('model', e.target.value)}
                 className={`${inputClass} mt-1.5 font-mono`}
               />
+              <datalist id="model-presets">
+                {allModels.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label htmlFor="ed-baseurl" className="text-sm font-medium">
@@ -427,6 +655,45 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
           </button>
         </section>
       </div>
+    </div>
+  )
+}
+
+function BackLink({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      <ArrowLeft className="size-3.5" /> All chatbots
+    </button>
+  )
+}
+
+interface FactFieldProps {
+  id: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  rows?: number
+}
+
+function FactField({ id, label, value, onChange, placeholder, rows = 3 }: FactFieldProps) {
+  return (
+    <div>
+      <label htmlFor={id} className="text-sm font-medium">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        rows={rows}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`${inputClass} mt-1.5 resize-y leading-relaxed`}
+      />
     </div>
   )
 }

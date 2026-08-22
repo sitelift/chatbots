@@ -1,11 +1,10 @@
-import type { ChatbotAdminView } from '@sitelift/shared'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ChatbotEditor } from '../src/pages/ChatbotEditor'
 
 const now = '2026-01-01T00:00:00.000Z'
 
-function view(overrides: Partial<ChatbotAdminView> = {}): ChatbotAdminView {
+function view(overrides: Record<string, unknown> = {}) {
   return {
     id: 'ch_edit1',
     name: 'Acme HVAC',

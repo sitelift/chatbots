@@ -84,6 +84,7 @@ export const chatbots = sqliteTable('chatbots', {
     .default(sql`'[]'`),
   poweredBy: integer('powered_by', { mode: 'boolean' }).notNull().default(true),
   systemPrompt: text('system_prompt').notNull().default(''),
+  factsJson: text('facts_json'),
   model: text('model').notNull().default('gpt-4o-mini'),
   baseUrl: text('base_url'),
   temperature: real('temperature').notNull().default(0.7),

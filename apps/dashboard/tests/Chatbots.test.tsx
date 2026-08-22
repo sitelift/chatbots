@@ -1,9 +1,8 @@
-import type { ChatbotAdminView } from '@sitelift/shared'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ChatbotsPage } from '../src/pages/Chatbots'
 
-function bot(overrides: Partial<ChatbotAdminView> = {}): ChatbotAdminView {
+function bot(overrides: Record<string, unknown> = {}) {
   const now = new Date().toISOString()
   return {
     id: 'ch_test1',

@@ -1,3 +1,4 @@
+import { PROVIDER_PRESETS, presetForBaseUrl } from '@sitelift/shared'
 import { Check, KeyRound, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { type AdminApiError, apiFetch } from '../lib/api'
@@ -124,21 +125,47 @@ export function SettingsPage() {
           </div>
 
           <div className="border-t pt-5">
-            <label htmlFor="baseurl" className="text-sm font-medium">
-              Base URL <span className="font-normal text-muted-foreground">· optional</span>
+            <div className="text-sm font-medium">Provider</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {PROVIDER_PRESETS.map((p) => {
+                const selected =
+                  p.id === 'openai'
+                    ? presetForBaseUrl(baseUrlInput) === undefined
+                    : presetForBaseUrl(baseUrlInput)?.id === p.id
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setBaseUrlInput(p.baseUrl)}
+                    aria-pressed={selected}
+                    className={`rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <label htmlFor="baseurl" className="mt-4 block text-sm font-medium">
+              Base URL
             </label>
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-              Leave empty for OpenAI. Point at OpenRouter, Groq, a local Ollama, or any compatible
-              endpoint.
-            </p>
             <input
               id="baseurl"
               type="url"
               value={baseUrlInput}
               onChange={(e) => setBaseUrlInput(e.target.value)}
-              placeholder="https://api.openai.com/v1"
-              className={`${inputClass} mt-2.5 font-mono`}
+              placeholder={presetForBaseUrl(baseUrlInput)?.baseUrl || 'https://api.openai.com/v1'}
+              className={`${inputClass} mt-1.5 font-mono`}
             />
+            {presetForBaseUrl(baseUrlInput)?.hint && (
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                {presetForBaseUrl(baseUrlInput)?.hint}
+              </p>
+            )}
           </div>
 
           {error && (
