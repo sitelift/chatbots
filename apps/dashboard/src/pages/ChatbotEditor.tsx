@@ -5,7 +5,6 @@ import {
   composeSystemPrompt,
   type FaqPair,
   type ModelOption,
-  PROVIDER_PRESETS,
 } from '@sitelift/shared'
 import { ArrowLeft, Check, ChevronDown, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -660,7 +659,7 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring"
                   />
                 </div>
-                <ul role="listbox" className="max-h-72 divide-y overflow-y-auto">
+                <ul className="max-h-72 divide-y overflow-y-auto">
                   {modelsError && (
                     <li className="px-3 py-3 text-sm text-destructive">{modelsError}</li>
                   )}
