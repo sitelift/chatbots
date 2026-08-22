@@ -210,13 +210,6 @@ export function ChatbotsPage() {
   }, [])
 
   useEffect(() => {
-    if (newIntent === '1') {
-      navigate({ to: '/chatbots', search: {}, replace: true })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
     void load()
   }, [load, navigate])
 
