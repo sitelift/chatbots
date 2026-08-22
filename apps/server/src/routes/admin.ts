@@ -13,6 +13,7 @@ import { db } from '../db'
 import { chatbots, clientAssignments, user as userTable } from '../db/schema'
 import { newId } from '../lib/ids'
 import { logger } from '../lib/logger'
+import { CatalogError, fetchModelCatalog } from '../lib/modelCatalog'
 import { requireRole } from '../lib/session'
 import { getAdminSettingsView, SettingsError, saveApiKey, saveBaseUrl } from '../services/settings'
 
@@ -172,6 +173,30 @@ adminRoutes.delete('/chatbots/:id', async (c) => {
   }
   db.delete(chatbots).where(eq(chatbots.id, row.id)).run()
   return c.body(null, 204)
+})
+
+adminRoutes.get('/models', async (c) => {
+  const baseUrl = c.req.query('baseUrl')?.trim()
+  if (!baseUrl) {
+    return c.json(
+      { error: { code: 'INVALID_INPUT', message: 'baseUrl query param required' } },
+      400,
+    )
+  }
+  try {
+    const models = await fetchModelCatalog(baseUrl)
+    return c.json({ models })
+  } catch (err) {
+    if (err instanceof CatalogError) {
+      const status = err.code === 'INVALID_URL' ? 400 : 502
+      return c.json({ error: { code: err.code, message: err.message } }, status)
+    }
+    logger.error({ err }, 'model catalog failed')
+    return c.json(
+      { error: { code: 'UPSTREAM_ERROR', message: 'Could not load model catalog' } },
+      502,
+    )
+  }
 })
 
 adminRoutes.get('/settings', (c) => c.json(getAdminSettingsView()))

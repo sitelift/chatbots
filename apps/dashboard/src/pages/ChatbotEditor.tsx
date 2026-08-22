@@ -4,6 +4,7 @@ import {
   chatbotInputSchema,
   composeSystemPrompt,
   type FaqPair,
+  type ModelOption,
   PROVIDER_PRESETS,
 } from '@sitelift/shared'
 import { ArrowLeft, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
@@ -118,6 +119,10 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
   const [savedFlash, setSavedFlash] = useState(false)
   const [armedDelete, setArmedDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [modelOptions, setModelOptions] = useState<ModelOption[] | null>(null)
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsError, setModelsError] = useState('')
+  const [modelFilter, setModelFilter] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -254,6 +259,26 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
       setSaveError(api?.message ?? 'Failed to delete')
       setDeleting(false)
       setArmedDelete(false)
+    }
+  }
+
+  async function loadModels() {
+    setModelsLoading(true)
+    setModelsError('')
+    try {
+      const effectiveBaseUrl =
+        form?.baseUrl.trim() || PROVIDER_PRESETS.find((p) => p.id === 'openai')?.baseUrl || ''
+      const data = await apiFetch<{ models: ModelOption[] }>(
+        `/api/admin/models?baseUrl=${encodeURIComponent(effectiveBaseUrl)}`,
+      )
+      setModelOptions(
+        [...data.models].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())),
+      )
+    } catch (err) {
+      const api = (err as Error & { api?: AdminApiError }).api
+      setModelsError(api?.message ?? 'Could not load models')
+    } finally {
+      setModelsLoading(false)
     }
   }
 
@@ -560,9 +585,29 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
           </summary>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="ed-model" className="text-sm font-medium">
-                Model
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="ed-model" className="text-sm font-medium">
+                  Model
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (modelOptions) {
+                      setModelOptions(null)
+                      setModelFilter('')
+                    } else {
+                      void loadModels()
+                    }
+                  }}
+                  className="text-[13px] font-medium text-primary underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  {modelsLoading
+                    ? 'Loading…'
+                    : modelOptions
+                      ? 'Close list'
+                      : 'Browse provider models'}
+                </button>
+              </div>
               <input
                 id="ed-model"
                 list="model-presets"
@@ -576,6 +621,62 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
                   <option key={m} value={m} />
                 ))}
               </datalist>
+
+              {modelsError && (
+                <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {modelsError}
+                </p>
+              )}
+
+              {modelOptions && (
+                <div className="mt-2 overflow-hidden rounded-lg border">
+                  <input
+                    type="text"
+                    value={modelFilter}
+                    onChange={(e) => setModelFilter(e.target.value)}
+                    placeholder={`Filter ${modelOptions.length} models…`}
+                    aria-label="Filter models"
+                    className="w-full border-b bg-muted/40 px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:outline-none"
+                  />
+                  <ul className="max-h-72 divide-y overflow-y-auto">
+                    {modelOptions
+                      .filter((m) =>
+                        `${m.id} ${m.name}`.toLowerCase().includes(modelFilter.toLowerCase()),
+                      )
+                      .slice(0, 100)
+                      .map((m) => (
+                        <li key={m.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              set('model', m.id)
+                              setModelOptions(null)
+                              setModelFilter('')
+                            }}
+                            className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150 hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm">{m.name}</span>
+                              <span className="block truncate font-mono text-xs text-muted-foreground">
+                                {m.id}
+                              </span>
+                            </span>
+                            <span className="tnum shrink-0 text-right text-xs text-muted-foreground">
+                              {m.promptPricePerM !== null && (
+                                <span className="block">in ${fmtPrice(m.promptPricePerM)} / M</span>
+                              )}
+                              {m.completionPricePerM !== null && (
+                                <span className="block">
+                                  out ${fmtPrice(m.completionPricePerM)} / M
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
             </div>
             <div>
               <label htmlFor="ed-baseurl" className="text-sm font-medium">
@@ -696,4 +797,10 @@ function FactField({ id, label, value, onChange, placeholder, rows = 3 }: FactFi
       />
     </div>
   )
+}
+
+function fmtPrice(perMillion: number): string {
+  if (perMillion === 0) return '0'
+  if (perMillion < 0.01) return String(Number.parseFloat(perMillion.toPrecision(3)))
+  return perMillion.toFixed(2)
 }

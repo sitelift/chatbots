@@ -58,3 +58,11 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
 export function presetForBaseUrl(baseUrl: string): ProviderPreset | undefined {
   return PROVIDER_PRESETS.find((p) => p.baseUrl !== '' && p.baseUrl === baseUrl.trim())
 }
+
+export interface ModelOption {
+  id: string
+  name: string
+  contextLength: number | null
+  promptPricePerM: number | null
+  completionPricePerM: number | null
+}

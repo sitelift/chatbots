@@ -75,6 +75,28 @@ export function resetUsers(): void {
 export function startMockProvider(port = 4107): Promise<Server> {
   return new Promise((resolve) => {
     const server: Server = createServer((req, res) => {
+      if (req.method === 'GET' && req.url?.includes('/models')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            data: [
+              {
+                id: 'test-mini',
+                name: 'Test Mini',
+                context_length: 8000,
+                pricing: { prompt: '0.000002', completion: '0.000006' },
+              },
+              {
+                id: 'test-large',
+                name: 'Test Large',
+                context_length: 128000,
+                pricing: { prompt: '0', completion: '0' },
+              },
+            ],
+          }),
+        )
+        return
+      }
       if (req.method === 'POST' && req.url?.includes('/chat/completions')) {
         res.writeHead(200, { 'Content-Type': 'text/event-stream' })
         const chunks = [

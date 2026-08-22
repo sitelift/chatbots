@@ -72,6 +72,38 @@ describe('admin settings API', () => {
     expect(creds.baseUrl).toBe('http://127.0.0.1:4107/v1')
   })
 
+  it('loads a normalized model catalog from a local endpoint', async () => {
+    let mock: Server | undefined
+    try {
+      mock = await startMockProvider(4107)
+      const res = await createApp().request(
+        `/api/admin/models?baseUrl=${encodeURIComponent('http://127.0.0.1:4107/v1')}`,
+        { headers: headers() },
+      )
+      expect(res.status).toBe(200)
+      const { models } = await res.json()
+      expect(models).toHaveLength(2)
+      expect(models[0]).toMatchObject({
+        id: 'test-mini',
+        name: 'Test Mini',
+        contextLength: 8000,
+        promptPricePerM: 2,
+        completionPricePerM: 6,
+      })
+    } finally {
+      mock?.close()
+    }
+  })
+
+  it('refuses to load catalogs from unsupported hosts', async () => {
+    const res = await createApp().request(
+      `/api/admin/models?baseUrl=${encodeURIComponent('https://evil.example.com/v1')}`,
+      { headers: headers() },
+    )
+    expect(res.status).toBe(502)
+    expect((await res.json()).error.code).toBe('UNSUPPORTED_PROVIDER')
+  })
+
   it('chat uses settings-stored credentials end to end', async () => {
     let mock: Server | undefined
     try {
