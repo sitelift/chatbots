@@ -15,7 +15,13 @@ import { newId } from '../lib/ids'
 import { logger } from '../lib/logger'
 import { CatalogError, fetchModelCatalog } from '../lib/modelCatalog'
 import { requireRole } from '../lib/session'
-import { getAdminSettingsView, SettingsError, saveApiKey, saveBaseUrl } from '../services/settings'
+import {
+  getAdminSettingsView,
+  resolveProviderCredentials,
+  SettingsError,
+  saveApiKey,
+  saveBaseUrl,
+} from '../services/settings'
 
 export const adminRoutes = new Hono()
 
@@ -184,11 +190,12 @@ adminRoutes.get('/models', async (c) => {
     )
   }
   try {
-    const models = await fetchModelCatalog(baseUrl)
+    const { apiKey } = resolveProviderCredentials()
+    const models = await fetchModelCatalog(baseUrl, apiKey || undefined)
     return c.json({ models })
   } catch (err) {
     if (err instanceof CatalogError) {
-      const status = err.code === 'INVALID_URL' ? 400 : 502
+      const status = err.code === 'INVALID_URL' ? 400 : err.code === 'UPSTREAM_AUTH' ? 401 : 502
       return c.json({ error: { code: err.code, message: err.message } }, status)
     }
     logger.error({ err }, 'model catalog failed')

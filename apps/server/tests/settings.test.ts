@@ -6,6 +6,7 @@ import { createApp } from '../src/index'
 import { resolveProviderCredentials } from '../src/services/settings'
 import {
   DEMO_CHATBOT_ID,
+  getLastModelsAuthHeader,
   resetUsers,
   seedDemoChatbot,
   signUpUser,
@@ -82,7 +83,7 @@ describe('admin settings API', () => {
       )
       expect(res.status).toBe(200)
       const { models } = await res.json()
-      expect(models).toHaveLength(2)
+      expect(models).toHaveLength(1)
       expect(models[0]).toMatchObject({
         id: 'test-mini',
         name: 'Test Mini',
@@ -90,6 +91,21 @@ describe('admin settings API', () => {
         promptPricePerM: 2,
         completionPricePerM: 6,
       })
+    } finally {
+      mock?.close()
+    }
+  })
+
+  it('forwards the stored API key when loading catalogs', async () => {
+    let mock: Server | undefined
+    try {
+      mock = await startMockProvider(4108, { requireAuth: true })
+      const res = await createApp().request(
+        `/api/admin/models?baseUrl=${encodeURIComponent('http://127.0.0.1:4108/v1')}`,
+        { headers: headers() },
+      )
+      expect(res.status).toBe(200)
+      expect(getLastModelsAuthHeader()).toBe('Bearer sk-live-abcd1234efgh')
     } finally {
       mock?.close()
     }

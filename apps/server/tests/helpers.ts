@@ -72,10 +72,25 @@ export function resetUsers(): void {
   db.delete(user).run()
 }
 
-export function startMockProvider(port = 4107): Promise<Server> {
+let lastModelsAuthHeader: string | null = null
+
+export function getLastModelsAuthHeader(): string | null {
+  return lastModelsAuthHeader
+}
+
+export function startMockProvider(
+  port = 4107,
+  options?: { requireAuth?: boolean },
+): Promise<Server> {
   return new Promise((resolve) => {
     const server: Server = createServer((req, res) => {
       if (req.method === 'GET' && req.url?.includes('/models')) {
+        lastModelsAuthHeader = req.headers.authorization ?? null
+        if (options?.requireAuth && lastModelsAuthHeader === null) {
+          res.writeHead(401, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: { message: 'missing key' } }))
+          return
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(
           JSON.stringify({
@@ -85,12 +100,6 @@ export function startMockProvider(port = 4107): Promise<Server> {
                 name: 'Test Mini',
                 context_length: 8000,
                 pricing: { prompt: '0.000002', completion: '0.000006' },
-              },
-              {
-                id: 'test-large',
-                name: 'Test Large',
-                context_length: 128000,
-                pricing: { prompt: '0', completion: '0' },
               },
             ],
           }),

@@ -6,7 +6,7 @@ const cache = new Map<string, { at: number; models: ModelOption[] }>()
 
 export class CatalogError extends Error {
   constructor(
-    public code: 'INVALID_URL' | 'UNSUPPORTED_PROVIDER' | 'UPSTREAM_ERROR',
+    public code: 'INVALID_URL' | 'UNSUPPORTED_PROVIDER' | 'UPSTREAM_ERROR' | 'UPSTREAM_AUTH',
     message: string,
   ) {
     super(message)
@@ -25,7 +25,10 @@ function toPerM(value: string | undefined): number | null {
   return Number.isFinite(n) ? n * 1_000_000 : null
 }
 
-export async function fetchModelCatalog(baseUrlRaw: string): Promise<ModelOption[]> {
+export async function fetchModelCatalog(
+  baseUrlRaw: string,
+  apiKey?: string,
+): Promise<ModelOption[]> {
   let url: URL
   try {
     url = new URL(baseUrlRaw)
@@ -48,13 +51,22 @@ export async function fetchModelCatalog(baseUrlRaw: string): Promise<ModelOption
   let res: Response
   try {
     res = await fetch(`${baseUrlRaw.replace(/\/+$/, '')}/models`, {
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
       signal: AbortSignal.timeout(8000),
     })
   } catch {
     throw new CatalogError('UPSTREAM_ERROR', 'Provider did not respond')
   }
   if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new CatalogError(
+        'UPSTREAM_AUTH',
+        'This provider requires an API key for its model list. Save your key in Settings first.',
+      )
+    }
     throw new CatalogError('UPSTREAM_ERROR', `Provider returned ${res.status}`)
   }
 
