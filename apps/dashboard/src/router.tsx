@@ -8,7 +8,6 @@ import {
   useParams,
   useRouterState,
 } from '@tanstack/react-router'
-import { LoaderCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Topbar } from './components/Topbar'

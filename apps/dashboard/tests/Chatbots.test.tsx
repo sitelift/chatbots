@@ -111,7 +111,7 @@ describe('ChatbotsPage', () => {
         body: bot('ch_1', 'Acme HVAC'),
       },
     ])
-    const renderResult = renderAtLocation('/chatbots')
+    renderAtLocation('/chatbots')
 
     fireEvent.click(await screen.findByText('Acme HVAC'))
     expect(await screen.findByText('Business facts')).toBeDefined()

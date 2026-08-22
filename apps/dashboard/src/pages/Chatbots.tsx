@@ -211,7 +211,7 @@ export function ChatbotsPage() {
 
   useEffect(() => {
     void load()
-  }, [load, navigate])
+  }, [load])
 
   async function toggleStatus(bot: ChatbotAdminView) {
     setRowBusyId(bot.id)
