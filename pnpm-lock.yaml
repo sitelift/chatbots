@@ -17,6 +17,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      better-auth:
+        specifier: ^1.7.1
+        version: 1.7.1(better-sqlite3@12.11.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.29.5))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12))
       lucide-react:
         specifier: ^0.539.0
         version: 0.539.0(react@19.2.8)
