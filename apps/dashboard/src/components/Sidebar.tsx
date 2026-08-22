@@ -20,7 +20,7 @@ const nav: { key: NavKey; label: string; icon: typeof Bot; enabled: boolean }[] 
 ]
 
 interface SidebarProps {
-  active: NavKey
+  active: NavKey | 'chatbot-detail'
   onSelect: (key: NavKey) => void
 }
 

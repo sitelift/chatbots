@@ -53,7 +53,7 @@ function stubFetch(responses: StubResponse[]) {
 describe('ChatbotsPage', () => {
   it('shows the empty state when there are no chatbots', async () => {
     stubFetch([{ status: 200, body: { chatbots: [] } }])
-    render(<ChatbotsPage />)
+    render(<ChatbotsPage onEdit={() => {}} />)
 
     expect(await screen.findByText('No chatbots yet')).toBeDefined()
   })
@@ -65,7 +65,7 @@ describe('ChatbotsPage', () => {
         body: { chatbots: [bot(), bot({ id: 'ch_2', name: 'Bella Dental', status: 'paused' })] },
       },
     ])
-    render(<ChatbotsPage />)
+    render(<ChatbotsPage onEdit={() => {}} />)
 
     expect(await screen.findByText('Acme HVAC')).toBeDefined()
     expect(screen.getByText('Bella Dental')).toBeDefined()
@@ -82,7 +82,7 @@ describe('ChatbotsPage', () => {
       { status: 200, body: { chatbots: [] } },
       { status: 201, body: created },
     ])
-    render(<ChatbotsPage />)
+    render(<ChatbotsPage onEdit={() => {}} />)
 
     fireEvent.click(await screen.findByText('New chatbot'))
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Nova Plumbing' } })
@@ -104,7 +104,7 @@ describe('ChatbotsPage', () => {
 
   it('rejects an invalid create client-side via the shared contract', async () => {
     const fetchMock = stubFetch([{ status: 200, body: { chatbots: [] } }])
-    render(<ChatbotsPage />)
+    render(<ChatbotsPage onEdit={() => {}} />)
 
     fireEvent.click(await screen.findByText('New chatbot'))
     fireEvent.click(screen.getByText('Create chatbot'))
@@ -118,7 +118,7 @@ describe('ChatbotsPage', () => {
 
   it('arms delete before sending the DELETE request', async () => {
     const fetchMock = stubFetch([{ status: 200, body: { chatbots: [bot()] } }, { status: 204 }])
-    render(<ChatbotsPage />)
+    render(<ChatbotsPage onEdit={() => {}} />)
     await screen.findByText('Acme HVAC')
 
     const deleteBtn = screen.getByLabelText('Delete Acme HVAC')

@@ -193,10 +193,15 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
   )
 }
 
-export function ChatbotsPage() {
+interface ChatbotsPageProps {
+  initialCreateOpen?: boolean
+  onEdit: (id: string) => void
+}
+
+export function ChatbotsPage({ initialCreateOpen, onEdit }: ChatbotsPageProps) {
   const [bots, setBots] = useState<ChatbotAdminView[] | null>(null)
   const [error, setError] = useState('')
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(Boolean(initialCreateOpen))
   const [creatingBusy, setCreatingBusy] = useState(false)
   const [armedDeleteId, setArmedDeleteId] = useState<string | null>(null)
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
@@ -338,63 +343,75 @@ export function ChatbotsPage() {
         ) : (
           <ul className="divide-y">
             {bots.map((bot) => (
-              <li
-                key={bot.id}
-                className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3.5 transition-colors duration-150 hover:bg-muted/40"
-              >
-                <div className="min-w-0 flex-1 basis-48">
-                  <p className="truncate text-sm font-medium">{bot.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {bot.websiteUrl ?? 'No website set'}
-                  </p>
-                </div>
-                <StatusBadge status={bot.status} />
-                <span className="hidden font-mono text-xs text-muted-foreground md:inline">
-                  {bot.model}
-                </span>
-                <span className="tnum hidden text-xs text-muted-foreground lg:inline">
-                  {new Date(bot.createdAt).toLocaleDateString(undefined, {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={rowBusyId === bot.id}
-                    onClick={() => void toggleStatus(bot)}
-                    aria-label={
-                      bot.status === 'active' ? `Pause ${bot.name}` : `Activate ${bot.name}`
-                    }
-                    title={bot.status === 'active' ? 'Pause — stops token spend' : 'Activate'}
-                    className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
-                  >
-                    {rowBusyId === bot.id ? (
-                      <LoaderCircle className="size-3.5 animate-spin" />
-                    ) : bot.status === 'active' ? (
-                      <Pause className="size-3.5" />
-                    ) : (
-                      <Play className="size-3.5" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={rowBusyId === bot.id}
-                    onClick={() => void remove(bot.id)}
-                    aria-label={
-                      armedDeleteId === bot.id ? `Confirm delete ${bot.name}` : `Delete ${bot.name}`
-                    }
-                    className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40 ${
-                      armedDeleteId === bot.id
-                        ? 'bg-destructive text-white hover:opacity-90'
-                        : 'text-muted-foreground hover:bg-muted hover:text-destructive'
-                    }`}
-                  >
-                    <Trash2 className="size-3.5" />
-                    {armedDeleteId === bot.id ? 'Confirm?' : 'Delete'}
-                  </button>
-                </div>
+              <li key={bot.id} className="list-none">
+                <button
+                  type="button"
+                  aria-label={`Edit ${bot.name}`}
+                  onClick={() => onEdit(bot.id)}
+                  className="flex w-full cursor-pointer flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3.5 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                >
+                  <div className="min-w-0 flex-1 basis-48">
+                    <p className="truncate text-sm font-medium">{bot.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {bot.websiteUrl ?? 'No website set'}
+                    </p>
+                  </div>
+                  <StatusBadge status={bot.status} />
+                  <span className="hidden font-mono text-xs text-muted-foreground md:inline">
+                    {bot.model}
+                  </span>
+                  <span className="tnum hidden text-xs text-muted-foreground lg:inline">
+                    {new Date(bot.createdAt).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={rowBusyId === bot.id}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void toggleStatus(bot)
+                      }}
+                      aria-label={
+                        bot.status === 'active' ? `Pause ${bot.name}` : `Activate ${bot.name}`
+                      }
+                      title={bot.status === 'active' ? 'Pause — stops token spend' : 'Activate'}
+                      className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
+                    >
+                      {rowBusyId === bot.id ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : bot.status === 'active' ? (
+                        <Pause className="size-3.5" />
+                      ) : (
+                        <Play className="size-3.5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={rowBusyId === bot.id}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void remove(bot.id)
+                      }}
+                      aria-label={
+                        armedDeleteId === bot.id
+                          ? `Confirm delete ${bot.name}`
+                          : `Delete ${bot.name}`
+                      }
+                      className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40 ${
+                        armedDeleteId === bot.id
+                          ? 'bg-destructive text-white hover:opacity-90'
+                          : 'text-muted-foreground hover:bg-muted hover:text-destructive'
+                      }`}
+                    >
+                      <Trash2 className="size-3.5" />
+                      {armedDeleteId === bot.id ? 'Confirm?' : 'Delete'}
+                    </button>
+                  </div>
+                </button>
               </li>
             ))}
           </ul>
