@@ -123,6 +123,7 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState('')
   const [modelFilter, setModelFilter] = useState('')
+  const [globalBaseUrl, setGlobalBaseUrl] = useState<string>('')
 
   const load = useCallback(async () => {
     try {
@@ -266,8 +267,15 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
     setModelsLoading(true)
     setModelsError('')
     try {
+      let settingsBaseUrl = globalBaseUrl
+      if (settingsBaseUrl === '') {
+        const settings = await apiFetch<{ baseUrl: string }>('/api/admin/settings')
+        settingsBaseUrl = settings.baseUrl ?? ''
+        setGlobalBaseUrl(settingsBaseUrl)
+      }
+      // resolution order mirrors the server: bot override -> global setting -> OpenAI
       const effectiveBaseUrl =
-        form?.baseUrl.trim() || PROVIDER_PRESETS.find((p) => p.id === 'openai')?.baseUrl || ''
+        form?.baseUrl.trim() || settingsBaseUrl || 'https://api.openai.com/v1'
       const data = await apiFetch<{ models: ModelOption[] }>(
         `/api/admin/models?baseUrl=${encodeURIComponent(effectiveBaseUrl)}`,
       )

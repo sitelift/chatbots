@@ -102,6 +102,33 @@ describe('ChatbotEditor', () => {
     expect(body.allowedDomains).toEqual(['acme.com'])
   })
 
+  it('browses models from the global provider when no per-bot override exists', async () => {
+    const fetchMock = stubFetch([
+      { status: 200, body: view({ baseUrl: null }) },
+      { status: 200, body: { hasKey: true, keyHint: '', keySource: 'settings', baseUrl: 'https://openrouter.ai/api/v1', encryptionAvailable: true } },
+      { status: 200, body: { models: [{ id: 'or-model', name: 'OR Model', contextLength: 64000, promptPricePerM: 0.15, completionPricePerM: 0.6 }] } },
+    ])
+    render(
+      <ChatbotEditor botId="ch_edit1" onBack={() => {}} onSaved={() => {}} onDeleted={() => {}} onPlayground={() => {}} />,
+    )
+    await screen.findByLabelText('Name')
+
+    fireEvent.click(screen.getByText('Browse provider models'))
+
+    await waitFor(() => {
+      expect(screen.getByText('OR Model')).toBeDefined()
+    })
+    const catalogCall = fetchMock.mock.calls.find(([path]) => String(path).startsWith('/api/admin/models'))
+    expect(catalogCall?.[0]).toBe(
+      `/api/admin/models?baseUrl=${encodeURIComponent('https://openrouter.ai/api/v1')}`,
+    )
+
+    fireEvent.click(screen.getByLabelText('Filter models'))
+    fireEvent.change(screen.getByLabelText('Filter models'), { target: { value: 'or' } })
+    fireEvent.click(screen.getByText('OR Model'))
+    expect((screen.getByLabelText('Model') as HTMLInputElement).value).toBe('or-model')
+  })
+
   it('arms delete before sending DELETE', async () => {
     const fetchMock = stubFetch([{ status: 200, body: view() }, { status: 204 }])
     render(
