@@ -665,7 +665,7 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
                   )}
                   {modelsLoading &&
                     Array.from({ length: 5 }).map((_, i) => (
-                      <li key={i} className="px-3 py-2.5">
+                      <li key={`skeleton-${i}`} className="px-3 py-2.5">
                         <div className="h-4 w-40 animate-pulse rounded bg-muted" />
                         <div className="mt-1.5 h-3 w-56 animate-pulse rounded bg-muted" />
                       </li>
