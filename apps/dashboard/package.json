@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@sitelift/shared": "workspace:*",
+    "@tanstack/react-router": "^1.170.31",
     "better-auth": "^1.7.1",
     "lucide-react": "^0.539.0",
     "react": "^19.1.0",

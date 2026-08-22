@@ -6,6 +6,7 @@ import {
   type FaqPair,
   type ModelOption,
 } from '@sitelift/shared'
+import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Check, ChevronDown, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ColorField } from '../components/ColorField'
@@ -14,10 +15,6 @@ import { inputClass, labelClass, textareaClass } from '../lib/ui'
 
 interface EditorProps {
   botId: string
-  onBack: () => void
-  onSaved: (view: ChatbotAdminView) => void
-  onDeleted: (id: string) => void
-  onPlayground: (id: string) => void
 }
 
 interface EditableFaq extends FaqPair {
@@ -61,7 +58,7 @@ function toForm(v: ChatbotAdminView): FormState {
     welcomeMessage: v.welcomeMessage,
     brandColor: v.brandColor,
     quickReplies: v.quickReplies.join(', '),
-    domains: v.allowedDomains.join(', '),
+    domains: (v.allowedDomains ?? []).join(', '),
     mode: hasStructured ? 'structured' : 'raw',
     facts: v.facts
       ? {
@@ -101,7 +98,14 @@ const FACT_PLACEHOLDERS = {
   products: 'AC repair, installation, seasonal tune-ups.\nFree estimates on installs.',
 } as const
 
-export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground }: EditorProps) {
+export function ChatbotEditor({ botId }: EditorProps) {
+  const navigate = useNavigate()
+  const onBack = () => navigate({ to: '/chatbots' })
+  const onDeleted = () => navigate({ to: '/chatbots' })
+  function onPlayground(id: string) {
+    navigate({ to: '/playground', search: { bot: id } })
+  }
+
   const [view, setView] = useState<ChatbotAdminView | null>(null)
   const [form, setForm] = useState<FormState | null>(null)
   const [loadError, setLoadError] = useState('')
@@ -245,7 +249,6 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
       })
       setView(updated)
       setForm(toForm(updated))
-      onSaved(updated)
       setSavedFlash(true)
       setTimeout(() => setSavedFlash(false), 2500)
     } catch (err) {
@@ -265,7 +268,7 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
     setDeleting(true)
     try {
       await apiFetch(`/api/admin/chatbots/${botId}`, { method: 'DELETE' })
-      onDeleted(botId)
+      onDeleted()
     } catch (err) {
       const api = (err as Error & { api?: AdminApiError }).api
       setSaveError(api?.message ?? 'Failed to delete')

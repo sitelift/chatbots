@@ -1,15 +1,15 @@
 import type { ChatbotAdminView } from '@sitelift/shared'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Check, Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { type AdminApiError, apiFetch } from '../lib/api'
 import { inputClass } from '../lib/ui'
 
-interface PlaygroundProps {
-  botId: string
-  onBotChange: (id: string) => void
-}
-
-export function PlaygroundPage({ botId, onBotChange }: PlaygroundProps) {
+export function PlaygroundPage() {
+  const navigate = useNavigate()
+  const { bot } = useSearch({ strict: false }) as { bot?: string }
+  const botId = bot ?? 'ch_demo'
+  const onBotChange = (id: string) => navigate({ to: '/playground', search: { bot: id } })
   const [bots, setBots] = useState<ChatbotAdminView[]>([])
   const [copied, setCopied] = useState(false)
   const snippet = `<script src="${window.location.origin}/embed.js" data-chatbot-id="${botId}"></script>`

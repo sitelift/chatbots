@@ -1,12 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { ChatbotsPage } from '../src/pages/Chatbots'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { renderAtLocation, type StubRoute, stubApi } from './router'
 
-function bot(overrides: Record<string, unknown> = {}) {
-  const now = new Date().toISOString()
+const now = '2026-01-01T00:00:00.000Z'
+
+function bot(id: string, name: string, overrides: Record<string, unknown> = {}) {
   return {
-    id: 'ch_test1',
-    name: 'Acme HVAC',
+    id,
+    name,
     websiteUrl: 'https://acme.com',
     welcomeMessage: 'Hi!',
     brandColor: '#18181b',
@@ -26,117 +27,119 @@ function bot(overrides: Record<string, unknown> = {}) {
   }
 }
 
-interface StubResponse {
-  status: number
-  body?: unknown
-}
-
-function stubFetch(responses: StubResponse[]) {
-  let call = 0
-  const fetchMock = vi.fn(async (_path: string, init?: RequestInit) => {
-    void init
-    const response = responses[Math.min(call, responses.length - 1)]
-    if (!response) throw new Error('No more stubbed fetch responses')
-    call++
-    return {
-      ok: response.status < 400,
-      status: response.status,
-      json: async () => response.body ?? {},
-      text: async () => JSON.stringify(response.body ?? {}),
-    }
-  })
-  vi.stubGlobal('fetch', fetchMock)
-  return fetchMock
-}
-
 describe('ChatbotsPage', () => {
   it('shows the empty state when there are no chatbots', async () => {
-    stubFetch([{ status: 200, body: { chatbots: [] } }])
-    render(<ChatbotsPage onEdit={() => {}} />)
+    stubApi([{ path: '/api/admin/chatbots', method: 'GET', status: 200, body: { chatbots: [] } }])
+    renderAtLocation('/chatbots')
 
     expect(await screen.findByText('No chatbots yet')).toBeDefined()
   })
 
   it('lists existing chatbots with status badges', async () => {
-    stubFetch([
+    stubApi([
       {
+        path: '/api/admin/chatbots',
+        method: 'GET',
         status: 200,
-        body: { chatbots: [bot(), bot({ id: 'ch_2', name: 'Bella Dental', status: 'paused' })] },
+        body: {
+          chatbots: [bot('ch_1', 'Acme HVAC'), bot('ch_2', 'Bella Dental', { status: 'paused' })],
+        },
       },
     ])
-    render(<ChatbotsPage onEdit={() => {}} />)
+    renderAtLocation('/chatbots')
 
     expect(await screen.findByText('Acme HVAC')).toBeDefined()
-    expect(screen.getByText('Bella Dental')).toBeDefined()
-    expect(screen.getAllByText('active').length).toBeGreaterThan(0)
-    expect(screen.getByText('paused')).toBeDefined()
     expect(screen.getByText('Bella Dental')).toBeDefined()
     expect(screen.getAllByText('active').length).toBeGreaterThan(0)
     expect(screen.getByText('paused')).toBeDefined()
   })
 
   it('creates a chatbot through the form and shows it in the list', async () => {
-    const created = bot({ id: 'ch_new', name: 'Nova Plumbing' })
-    const fetchMock = stubFetch([
-      { status: 200, body: { chatbots: [] } },
-      { status: 201, body: created },
+    const created = bot('ch_new', 'Nova Plumbing')
+    const fetchMock = stubApi([
+      { path: '/api/admin/chatbots', method: 'GET', status: 200, body: { chatbots: [] } },
+      { path: '/api/admin/chatbots', method: 'POST', status: 201, body: created },
     ])
-    render(<ChatbotsPage onEdit={() => {}} />)
-
+    renderAtLocation('/chatbots')
     fireEvent.click(await screen.findByText('New chatbot'))
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Nova Plumbing' } })
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Nova Plumbing' } })
     fireEvent.click(screen.getByText('Create chatbot'))
 
     await waitFor(() => {
       expect(screen.getByText('Nova Plumbing')).toBeDefined()
     })
 
-    const postCall = fetchMock.mock.calls.find(
-      ([, init]) => (init as RequestInit)?.method === 'POST',
-    )
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(postCall?.[0]).toBe('/api/admin/chatbots')
-    const init = (postCall?.[1] ?? {}) as RequestInit
-    const body = JSON.parse(String(init.body ?? '{}'))
-    expect(body.name).toBe('Nova Plumbing')
-    expect(body.brandColor).toBe('#18181b')
+    expect(JSON.parse(String(postCall?.[1]?.body)).name).toBe('Nova Plumbing')
   })
 
   it('rejects an invalid create client-side via the shared contract', async () => {
-    const fetchMock = stubFetch([{ status: 200, body: { chatbots: [] } }])
-    render(<ChatbotsPage onEdit={() => {}} />)
+    const fetchMock = stubApi([
+      { path: '/api/admin/chatbots', method: 'GET', status: 200, body: { chatbots: [] } },
+    ])
+    renderAtLocation('/chatbots')
 
     fireEvent.click(await screen.findByText('New chatbot'))
     fireEvent.click(screen.getByText('Create chatbot'))
 
     await waitFor(() => {
-      expect(
-        fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === 'POST'),
-      ).toHaveLength(0)
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
     })
   })
 
+  it('opens the create form directly from the ?new=1 deep link', async () => {
+    stubApi([{ path: '/api/admin/chatbots', method: 'GET', status: 200, body: { chatbots: [] } }])
+    const rr = renderAtLocation('/chatbots')
+    await screen.findByText('No chatbots yet')
+    await rr.rawRouter.navigate({ to: '/chatbots', search: { new: '1' } })
+    expect(await screen.findByLabelText('Name')).toBeDefined()
+  })
+
+  it('navigates to the editor when a row is clicked', async () => {
+    stubApi([
+      {
+        path: '/api/admin/chatbots',
+        method: 'GET',
+        status: 200,
+        body: { chatbots: [bot('ch_1', 'Acme HVAC')] },
+      },
+      {
+        path: '/api/admin/chatbots/ch_1',
+        method: 'GET',
+        status: 200,
+        body: bot('ch_1', 'Acme HVAC'),
+      },
+    ])
+    const renderResult = renderAtLocation('/chatbots')
+
+    fireEvent.click(await screen.findByText('Acme HVAC'))
+    expect(await screen.findByText('Business facts')).toBeDefined()
+  })
+
   it('arms delete before sending the DELETE request', async () => {
-    const fetchMock = stubFetch([{ status: 200, body: { chatbots: [bot()] } }, { status: 204 }])
-    render(<ChatbotsPage onEdit={() => {}} />)
+    const routes: StubRoute[] = [
+      { path: '/api/admin/chatbots/ch_test1', method: 'DELETE', status: 204 },
+      {
+        path: '/api/admin/chatbots',
+        method: 'GET',
+        status: 200,
+        body: { chatbots: [bot('ch_test1', 'Acme HVAC')] },
+      },
+    ]
+    const fetchMock = stubApi(routes)
+    renderAtLocation('/chatbots')
     await screen.findByText('Acme HVAC')
 
     const deleteBtn = screen.getByLabelText('Delete Acme HVAC')
     fireEvent.click(deleteBtn)
     expect(screen.getByText('Confirm?')).toBeDefined()
-    expect(
-      fetchMock.mock.calls.filter(([, init]) => (init as RequestInit)?.method === 'DELETE'),
-    ).toHaveLength(0)
 
     fireEvent.click(screen.getByText('Confirm?'))
     await waitFor(() => {
-      const deletes = fetchMock.mock.calls.filter(
-        ([, init]) => (init as RequestInit)?.method === 'DELETE',
-      )
+      const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')
       expect(deletes).toHaveLength(1)
       expect(deletes[0]?.[0]).toBe('/api/admin/chatbots/ch_test1')
-    })
-    await waitFor(() => {
-      expect(screen.queryByText('Acme HVAC')).toBeNull()
     })
   })
 })

@@ -1,4 +1,5 @@
 import { type ChatbotAdminView, chatbotInputSchema } from '@sitelift/shared'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Bot, LoaderCircle, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { ColorField } from '../components/ColorField'
@@ -186,15 +187,12 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
   )
 }
 
-interface ChatbotsPageProps {
-  initialCreateOpen?: boolean
-  onEdit: (id: string) => void
-}
-
-export function ChatbotsPage({ initialCreateOpen, onEdit }: ChatbotsPageProps) {
+export function ChatbotsPage() {
+  const navigate = useNavigate()
+  const { new: newIntent } = useSearch({ strict: false }) as { new?: '1' }
+  const creating = newIntent === '1'
   const [bots, setBots] = useState<ChatbotAdminView[] | null>(null)
   const [error, setError] = useState('')
-  const [creating, setCreating] = useState(Boolean(initialCreateOpen))
   const [creatingBusy, setCreatingBusy] = useState(false)
   const [armedDeleteId, setArmedDeleteId] = useState<string | null>(null)
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
@@ -209,6 +207,13 @@ export function ChatbotsPage({ initialCreateOpen, onEdit }: ChatbotsPageProps) {
       setError(api?.message ?? 'Failed to load chatbots')
       setBots([])
     }
+  }, [])
+
+  useEffect(() => {
+    if (newIntent === '1') {
+      navigate({ to: '/chatbots', search: {}, replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -256,8 +261,7 @@ export function ChatbotsPage({ initialCreateOpen, onEdit }: ChatbotsPageProps) {
 
   function replaceWithCreated(view: ChatbotAdminView) {
     setBots((list) => [view, ...(list ?? [])])
-    setCreating(false)
-    setCreatingBusy(false)
+    navigate({ to: '/chatbots', search: {}, replace: true })
   }
 
   return (
@@ -281,7 +285,7 @@ export function ChatbotsPage({ initialCreateOpen, onEdit }: ChatbotsPageProps) {
           {!creating && (
             <button
               type="button"
-              onClick={() => setCreating(true)}
+              onClick={() => navigate({ to: '/chatbots', search: { new: '1' } })}
               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <Plus className="size-3.5" />
@@ -293,7 +297,7 @@ export function ChatbotsPage({ initialCreateOpen, onEdit }: ChatbotsPageProps) {
         {creating && (
           <CreateForm
             busy={creatingBusy}
-            onCancel={() => setCreating(false)}
+            onCancel={() => navigate({ to: '/chatbots', search: {}, replace: true })}
             onError={(m) => {
               setError(m)
               setCreatingBusy(false)
@@ -325,7 +329,7 @@ export function ChatbotsPage({ initialCreateOpen, onEdit }: ChatbotsPageProps) {
             {!creating && (
               <button
                 type="button"
-                onClick={() => setCreating(true)}
+                onClick={() => navigate({ to: '/chatbots', search: { new: '1' } })}
                 className="mt-5 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 <Plus className="size-3.5" />
@@ -340,7 +344,12 @@ export function ChatbotsPage({ initialCreateOpen, onEdit }: ChatbotsPageProps) {
                 <button
                   type="button"
                   aria-label={`Edit ${bot.name}`}
-                  onClick={() => onEdit(bot.id)}
+                  onClick={() => {
+                    navigate({
+                      to: '/chatbots/$botId',
+                      params: { botId: bot.id },
+                    })
+                  }}
                   className="flex w-full cursor-pointer flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3.5 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                 >
                   <div className="min-w-0 flex-1 basis-48">

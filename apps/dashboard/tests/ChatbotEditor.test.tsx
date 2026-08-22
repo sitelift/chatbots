@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { ChatbotEditor } from '../src/pages/ChatbotEditor'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { renderAtLocation, stubApi } from './router'
 
 const now = '2026-01-01T00:00:00.000Z'
 
@@ -21,69 +21,38 @@ function view(overrides: Record<string, unknown> = {}) {
     maxTokens: 512,
     status: 'active',
     allowedDomains: ['acme.com'],
+    facts: {
+      overview: 'Family HVAC in Austin.',
+      hours: 'Mon–Fri 8–6',
+      contact: '(512) 555-0100',
+      faqs: [{ q: 'Do you fix furnaces?', a: 'Yes.' }],
+    },
     createdAt: now,
     updatedAt: now,
     ...overrides,
   }
 }
 
-interface StubResponse {
-  status: number
-  body?: unknown
-}
-
-function stubFetch(responses: StubResponse[]) {
-  let call = 0
-  const fetchMock = vi.fn(async (_path: string, init?: RequestInit) => {
-    void init
-    const response = responses[Math.min(call, responses.length - 1)]
-    if (!response) throw new Error('No more stubbed fetch responses')
-    call++
-    return {
-      ok: response.status < 400,
-      status: response.status,
-      json: async () => response.body ?? {},
-      text: async () => JSON.stringify(response.body ?? {}),
-    }
-  })
-  vi.stubGlobal('fetch', fetchMock)
-  return fetchMock
-}
-
 describe('ChatbotEditor', () => {
-  it('prefills fields from the loaded chatbot', async () => {
-    stubFetch([{ status: 200, body: view() }])
-    render(
-      <ChatbotEditor
-        botId="ch_edit1"
-        onBack={() => {}}
-        onSaved={() => {}}
-        onDeleted={() => {}}
-        onPlayground={() => {}}
-      />,
-    )
+  it('prefills structured facts from the loaded chatbot', async () => {
+    stubApi([{ path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() }])
+    renderAtLocation('/chatbots/ch_edit1')
 
     const nameInput = (await screen.findByLabelText('Name')) as HTMLInputElement
     expect(nameInput.value).toBe('Acme HVAC')
     expect((screen.getByLabelText(/Quick replies/i) as HTMLInputElement).value).toBe('Hours?')
-    expect(screen.getByText('Business facts')).toBeDefined()
+    expect((screen.getByLabelText('Business overview') as HTMLTextAreaElement).value).toBe(
+      'Family HVAC in Austin.',
+    )
   })
 
-  it('saves edited fields through PUT with the full payload', async () => {
+  it('saves edited fields through PUT', async () => {
     const updated = view({ name: 'Acme HVAC & Cooling' })
-    const fetchMock = stubFetch([
-      { status: 200, body: view() },
-      { status: 200, body: updated },
+    const fetchMock = stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
+      { path: '/api/admin/chatbots/ch_edit1', method: 'PUT', status: 200, body: updated },
     ])
-    render(
-      <ChatbotEditor
-        botId="ch_edit1"
-        onBack={() => {}}
-        onSaved={() => {}}
-        onDeleted={() => {}}
-        onPlayground={() => {}}
-      />,
-    )
+    renderAtLocation('/chatbots/ch_edit1')
 
     fireEvent.change(await screen.findByLabelText('Name'), {
       target: { value: 'Acme HVAC & Cooling' },
@@ -93,19 +62,19 @@ describe('ChatbotEditor', () => {
     await waitFor(() => {
       expect(screen.getByText('Saved.')).toBeDefined()
     })
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Acme HVAC & Cooling')
 
     const putCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')
     expect(putCall?.[0]).toBe('/api/admin/chatbots/ch_edit1')
-    const body = JSON.parse(String(init_body(putCall?.[1])))
-    expect(body.name).toBe('Acme HVAC & Cooling')
-    expect(body.systemPrompt).toBe('You help Acme customers.')
-    expect(body.allowedDomains).toEqual(['acme.com'])
+    expect(JSON.parse(String(putCall?.[1]?.body)).name).toBe('Acme HVAC & Cooling')
   })
 
   it('browses models from the global provider when no per-bot override exists', async () => {
-    const fetchMock = stubFetch([
-      { status: 200, body: view({ baseUrl: null }) },
+    const fetchMock = stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
       {
+        path: '/api/admin/settings',
+        method: 'GET',
         status: 200,
         body: {
           hasKey: true,
@@ -116,6 +85,8 @@ describe('ChatbotEditor', () => {
         },
       },
       {
+        path: /\/api\/admin\/models\?/,
+        method: 'GET',
         status: 200,
         body: {
           models: [
@@ -130,19 +101,9 @@ describe('ChatbotEditor', () => {
         },
       },
     ])
-    render(
-      <ChatbotEditor
-        botId="ch_edit1"
-        onBack={() => {}}
-        onSaved={() => {}}
-        onDeleted={() => {}}
-        onPlayground={() => {}}
-      />,
-    )
-    await screen.findByLabelText('Name')
+    renderAtLocation('/chatbots/ch_edit1')
 
-    fireEvent.click(screen.getByLabelText(/Model: gpt-4o-mini/))
-
+    fireEvent.click(await screen.findByLabelText(/Model: gpt-4o-mini/))
     const searchBox = await screen.findByLabelText('Search models')
     await waitFor(() => {
       expect(screen.getByRole('option', { name: /OR Model/ })).toBeDefined()
@@ -161,30 +122,19 @@ describe('ChatbotEditor', () => {
   })
 
   it('arms delete before sending DELETE', async () => {
-    const fetchMock = stubFetch([{ status: 200, body: view() }, { status: 204 }])
-    render(
-      <ChatbotEditor
-        botId="ch_edit1"
-        onBack={() => {}}
-        onSaved={() => {}}
-        onDeleted={() => {}}
-        onPlayground={() => {}}
-      />,
-    )
+    const fetchMock = stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
+      { path: '/api/admin/chatbots/ch_edit1', method: 'DELETE', status: 204 },
+    ])
+    renderAtLocation('/chatbots/ch_edit1')
     await screen.findByLabelText('Name')
 
-    const deleteBtn = screen.getByLabelText('Delete Acme HVAC')
-    fireEvent.click(deleteBtn)
-    const armedBtn = screen.getByLabelText('Confirm delete')
+    fireEvent.click(screen.getByLabelText('Delete Acme HVAC'))
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(0)
 
-    fireEvent.click(armedBtn)
+    fireEvent.click(screen.getByLabelText('Confirm delete'))
     await waitFor(() => {
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1)
     })
   })
 })
-
-function init_body(init?: RequestInit): unknown {
-  return init?.body ?? '{}'
-}

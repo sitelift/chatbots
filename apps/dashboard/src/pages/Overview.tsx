@@ -1,14 +1,11 @@
 import type { ChatbotAdminView } from '@sitelift/shared'
+import { useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Bot, MessageSquare, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../lib/api'
 
-interface OverviewProps {
-  onNewChatbot: () => void
-  onViewChatbots: () => void
-}
-
-export function Overview({ onNewChatbot, onViewChatbots }: OverviewProps) {
+export function Overview() {
+  const navigate = useNavigate({ from: '/' })
   const [bots, setBots] = useState<ChatbotAdminView[] | null>(null)
 
   useEffect(() => {
@@ -75,7 +72,7 @@ export function Overview({ onNewChatbot, onViewChatbots }: OverviewProps) {
           </div>
           <button
             type="button"
-            onClick={onViewChatbots}
+            onClick={() => navigate({ to: '/chatbots' })}
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             View all
@@ -89,7 +86,7 @@ export function Overview({ onNewChatbot, onViewChatbots }: OverviewProps) {
               <li key={b.id}>
                 <button
                   type="button"
-                  onClick={() => onViewChatbots()}
+                  onClick={() => navigate({ to: '/chatbots' })}
                   className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                 >
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{b.name}</span>
@@ -123,7 +120,7 @@ export function Overview({ onNewChatbot, onViewChatbots }: OverviewProps) {
             {bots !== null && (
               <button
                 type="button"
-                onClick={onNewChatbot}
+                onClick={() => navigate({ to: '/chatbots', search: { new: '1' } })}
                 className="mt-5 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 <Zap className="size-3.5" />

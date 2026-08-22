@@ -1,30 +1,24 @@
+import { useNavigate } from '@tanstack/react-router'
 import { Bot, FlaskConical, MessageSquare, Settings, TrendingUp, Users, Zap } from 'lucide-react'
 
-export type NavKey =
-  | 'overview'
-  | 'chatbots'
-  | 'conversations'
-  | 'leads'
-  | 'clients'
-  | 'playground'
-  | 'settings'
+const nav = [
+  { path: '/', label: 'Overview', icon: TrendingUp, enabled: true },
+  { path: '/chatbots', label: 'Chatbots', icon: Bot, enabled: true },
+  { path: '/conversations', label: 'Conversations', icon: MessageSquare, enabled: false },
+  { path: '/leads', label: 'Leads', icon: Zap, enabled: false },
+  { path: '/clients', label: 'Clients', icon: Users, enabled: false },
+  { path: '/playground', label: 'Playground', icon: FlaskConical, enabled: true },
+  { path: '/settings', label: 'Settings', icon: Settings, enabled: true },
+] as const
 
-const nav: { key: NavKey; label: string; icon: typeof Bot; enabled: boolean }[] = [
-  { key: 'overview', label: 'Overview', icon: TrendingUp, enabled: true },
-  { key: 'chatbots', label: 'Chatbots', icon: Bot, enabled: true },
-  { key: 'conversations', label: 'Conversations', icon: MessageSquare, enabled: false },
-  { key: 'leads', label: 'Leads', icon: Zap, enabled: false },
-  { key: 'clients', label: 'Clients', icon: Users, enabled: false },
-  { key: 'playground', label: 'Playground', icon: FlaskConical, enabled: true },
-  { key: 'settings', label: 'Settings', icon: Settings, enabled: true },
-]
+export function Sidebar({ pathname }: { pathname: string }) {
+  const navigate = useNavigate()
 
-interface SidebarProps {
-  active: NavKey | 'chatbot-detail'
-  onSelect: (key: NavKey) => void
-}
+  function isActive(path: string): boolean {
+    if (path === '/') return pathname === '/'
+    return pathname.startsWith(path)
+  }
 
-export function Sidebar({ active, onSelect }: SidebarProps) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
@@ -34,15 +28,15 @@ export function Sidebar({ active, onSelect }: SidebarProps) {
         <span className="text-[15px] font-semibold tracking-tight">SiteLift</span>
       </div>
       <nav className="flex flex-col gap-0.5 px-3 py-3">
-        {nav.map(({ key, label, icon: Icon, enabled }) => (
+        {nav.map(({ path, label, icon: Icon, enabled }) => (
           <button
-            key={key}
+            key={label}
             type="button"
             disabled={!enabled}
-            onClick={() => enabled && onSelect(key)}
-            aria-current={active === key ? 'page' : undefined}
+            onClick={() => enabled && navigate({ to: path })}
+            aria-current={isActive(path) ? 'page' : undefined}
             className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors duration-150 ${
-              active === key
+              isActive(path)
                 ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
                 : enabled
                   ? 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'
