@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { type NavKey, Sidebar } from './components/Sidebar'
 import { Topbar } from './components/Topbar'
 import { type AppUser, authClient } from './lib/auth-client'
+import { ChatbotsPage } from './pages/Chatbots'
 import { LoginPage } from './pages/Login'
 import { Overview } from './pages/Overview'
 import { PlaygroundPage } from './pages/Playground'
@@ -46,6 +47,7 @@ export default function App() {
         <Topbar dark={dark} user={user} onToggleTheme={() => setDark((d) => !d)} />
         <main className="flex-1 overflow-y-auto">
           {page === 'overview' && <Overview />}
+          {page === 'chatbots' && <ChatbotsPage />}
           {page === 'playground' && <PlaygroundPage />}
           {page === 'settings' && <SettingsPage />}
         </main>

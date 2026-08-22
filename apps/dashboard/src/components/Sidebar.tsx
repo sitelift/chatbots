@@ -11,7 +11,7 @@ export type NavKey =
 
 const nav: { key: NavKey; label: string; icon: typeof Bot; enabled: boolean }[] = [
   { key: 'overview', label: 'Overview', icon: TrendingUp, enabled: true },
-  { key: 'chatbots', label: 'Chatbots', icon: Bot, enabled: false },
+  { key: 'chatbots', label: 'Chatbots', icon: Bot, enabled: true },
   { key: 'conversations', label: 'Conversations', icon: MessageSquare, enabled: false },
   { key: 'leads', label: 'Leads', icon: Zap, enabled: false },
   { key: 'clients', label: 'Clients', icon: Users, enabled: false },
