@@ -65,7 +65,7 @@ Widget renders tokens live; lead captured → email to owner
 Tracked in [`AGENTS.md`](AGENTS.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md):
 
 - TypeScript strict everywhere; Node 22 + Hono + Zod; SQLite + Drizzle; better-auth (passwords + passkeys).
-- One React app (React 19 + Vite + Tailwind v4 + shadcn/ui + TanStack) serving both agency and client roles.
+- One React app (React 19 + Vite + Tailwind v4 + shadcn/ui + TanStack) serving both agency and client roles, with real URL routing (deep links, refresh-safe).
 - Widget authored in TS, built to a single dependency-free `embed.js` in Shadow DOM.
 - Roles `agency` / `client`; clients edit their own facts directly; scoping enforced server-side.
 - White-label free and core; powered-by badge toggleable; email-only lead notifications (SMTP).

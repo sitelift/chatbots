@@ -84,7 +84,18 @@ Non-streaming `POST .../messages` retained as fallback.
 
 ### 4.2 `apps/dashboard`
 
-One React SPA at `/admin` (login included). Role-aware routing:
+One React SPA at `/admin` (login included), built on **TanStack Router** (code-based tree) so every surface is a real URL — refresh, back/forward and deep links all work. Routes:
+
+| Path | View | Notes |
+| --- | --- | --- |
+| `/login` | Sign-in / sign-up | Outside the guarded layout |
+| `/` | Overview | Live counts |
+| `/chatbots` | List (+ `?new=1` opens create) | URL-driven intent |
+| `/chatbots/$botId` | Full chatbot editor | Deep-linkable per client |
+| `/playground?bot=$id` | Widget playground | Bot selector reflected in URL |
+| `/settings` | Provider & key config | Agency role only |
+
+Auth is enforced by a `beforeLoad` guard on the layout route (redirects to `/login` when the session is absent); role scoping is re-verified server-side on every request. In production the router runs with basepath `/admin` and the Hono server SPA-falls back any `/admin/*` path to the built `index.html`. Tests render pages through the same tree using memory history (`renderAtLocation`). Role-aware views:
 
 - **Agency views:** setup wizard, chatbot list/create/edit (facts editor + FAQ pairs + prompt preview), client management, cross-bot conversation browser, lead inbox, analytics overview, settings (AI key, SMTP, branding, powered-by default).
 - **Client views:** their chatbot(s) only — facts/appearance editor with test playground, chat history, lead list + CSV export, stats.

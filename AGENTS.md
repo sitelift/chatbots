@@ -22,7 +22,7 @@ A web agency self-hosts SiteLift via Docker. From the agency dashboard they crea
 ## Settled decisions
 
 - **Stack:** TypeScript strict · Node 22 · Hono + Zod · SQLite + Drizzle ORM (+ drizzle-kit, drizzle-zod) · better-auth (email+password + passkeys, sessions, CSRF) · pino · nodemailer.
-- **Frontend:** ONE React app (React 19 + Vite + Tailwind CSS v4 + shadcn/ui + TanStack Router/Query) serving both roles; role-aware routing; design language per PRODUCT.md principle 1.
+- **Frontend:** ONE React app (React 19 + Vite + Tailwind CSS v4 + shadcn/ui + TanStack Query) serving both roles; **URL routing via TanStack Router** (code-based tree, auth-guarded layout, prod basepath `/admin`, deep-linkable create/playground intents); design language per docs/STYLE.md.
 - **Monorepo:** pnpm workspaces — `apps/server`, `apps/dashboard`, `packages/shared` (Zod contracts), `packages/widget`, `packages/config`. Tooling: Biome, Vitest, GitHub Actions.
 - **Widget:** TS source → single dependency-free `embed.js`, Shadow DOM, `data-*` config, localStorage ids, streaming with optimistic UI, quick replies, optional proactive nudge, language matching, accessible (keyboard/ARIA/reduced motion).
 - **Roles:** `agency` (full reach) / `client` (assigned chatbots only); ownership-chain scoping enforced in the query layer, never just UI.
