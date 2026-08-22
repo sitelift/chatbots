@@ -1,6 +1,7 @@
 import { type ChatbotAdminView, chatbotInputSchema } from '@sitelift/shared'
 import { Bot, LoaderCircle, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { ColorField } from '../components/ColorField'
 import { type AdminApiError, apiFetch } from '../lib/api'
 import { inputClass, labelClass } from '../lib/ui'
 
@@ -120,16 +121,10 @@ export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormPro
 
       <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
         <div>
-          <label htmlFor="bot-color" className={labelClass}>
-            Brand color
-          </label>
-          <input
-            id="bot-color"
-            type="color"
-            value={brandColor}
-            onChange={(e) => setBrandColor(e.target.value)}
-            className="mt-1.5 h-9 w-full cursor-pointer rounded-md border border-input bg-background p-1"
-          />
+          <span className={labelClass}>Brand color</span>
+          <div className="mt-1.5">
+            <ColorField value={brandColor} onChange={setBrandColor} />
+          </div>
         </div>
         <div>
           <label htmlFor="bot-domains" className={labelClass}>

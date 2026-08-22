@@ -8,6 +8,7 @@ import {
 } from '@sitelift/shared'
 import { ArrowLeft, Check, ChevronDown, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ColorField } from '../components/ColorField'
 import { type AdminApiError, apiFetch } from '../lib/api'
 import { inputClass, labelClass, textareaClass } from '../lib/ui'
 
@@ -400,25 +401,8 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <span className={labelClass}>Brand color</span>
-                <div className="relative mt-1.5">
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute left-1.5 top-1/2 size-6 -translate-y-1/2 rounded-[5px] border border-black/20 dark:border-white/25"
-                    style={{ backgroundColor: form.brandColor }}
-                  />
-                  <input
-                    readOnly
-                    aria-label="Brand color hex value"
-                    value={form.brandColor.toUpperCase()}
-                    className={`${inputClass} pl-9 font-mono uppercase`}
-                  />
-                  <input
-                    type="color"
-                    value={form.brandColor}
-                    onChange={(e) => set('brandColor', e.target.value)}
-                    aria-label="Pick brand color"
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  />
+                <div className="mt-1.5">
+                  <ColorField value={form.brandColor} onChange={(v) => set('brandColor', v)} />
                 </div>
               </div>
               <div>
