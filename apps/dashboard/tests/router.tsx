@@ -11,12 +11,9 @@ export function renderAtLocation(path: string) {
   })
   render(<RouterProvider router={router as never} />)
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    currentPath: () => (router as any).state.location.pathname,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    currentSearch: () => (router as any).state.location.search,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rawRouter: router as any,
+    currentPath: () => router.state.location.pathname,
+    currentSearch: () => router.state.location.search,
+    rawRouter: router,
   }
 }
 
