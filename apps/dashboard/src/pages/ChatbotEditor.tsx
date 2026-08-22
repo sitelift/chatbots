@@ -7,8 +7,8 @@ import {
   type ModelOption,
   PROVIDER_PRESETS,
 } from '@sitelift/shared'
-import { ArrowLeft, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, Check, ChevronDown, LoaderCircle, Plus, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type AdminApiError, apiFetch } from '../lib/api'
 
 const inputClass =
@@ -39,9 +39,6 @@ interface FormState {
   facts: Omit<BusinessFacts, 'faqs'> & { faqs?: EditableFaq[] }
   rawPrompt: string
   model: string
-  baseUrl: string
-  temperature: string
-  maxTokens: string
   poweredBy: boolean
 }
 
@@ -77,9 +74,6 @@ function toForm(v: ChatbotAdminView): FormState {
       : emptyFacts(),
     rawPrompt: hasStructured ? '' : v.systemPrompt,
     model: v.model,
-    baseUrl: v.baseUrl ?? '',
-    temperature: String(v.temperature),
-    maxTokens: String(v.maxTokens),
     poweredBy: v.poweredBy,
   }
 }
@@ -124,6 +118,9 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
   const [modelsError, setModelsError] = useState('')
   const [modelFilter, setModelFilter] = useState('')
   const [globalBaseUrl, setGlobalBaseUrl] = useState<string>('')
+  const [modelPickerOpen, setModelPickerOpen] = useState(false)
+  const modelPickerRef = useRef<HTMLDivElement>(null)
+  const modelSearchRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -139,6 +136,17 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (!modelPickerOpen) return
+    function onPointerDown(e: MouseEvent) {
+      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+        setModelPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [modelPickerOpen])
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => (f ? { ...f, [key]: value } : f))
@@ -183,6 +191,16 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
     })
   }
 
+  const filteredModels = useMemo(() => {
+    if (!modelOptions) return []
+    const q = modelFilter.toLowerCase()
+    return modelOptions.filter((m) => `${m.id} ${m.name}`.toLowerCase().includes(q))
+  }, [modelOptions, modelFilter])
+
+  useEffect(() => {
+    if (modelPickerOpen) modelSearchRef.current?.focus()
+  }, [modelPickerOpen])
+
   const preview = useMemo(() => {
     if (!form) return ''
     if (form.mode === 'raw') return form.rawPrompt
@@ -194,8 +212,6 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
     setValidationError('')
     setSaveError('')
 
-    const temperature = Number.parseFloat(form.temperature)
-    const maxTokens = Number.parseInt(form.maxTokens, 10)
     const base = {
       name: form.name.trim(),
       websiteUrl: form.websiteUrl.trim(),
@@ -204,9 +220,6 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
       quickReplies: splitList(form.quickReplies).slice(0, 6),
       poweredBy: form.poweredBy,
       model: form.model.trim() || view.model,
-      baseUrl: form.baseUrl.trim(),
-      temperature: Number.isFinite(temperature) ? temperature : view.temperature,
-      maxTokens: Number.isFinite(maxTokens) ? maxTokens : view.maxTokens,
       allowedDomains: splitList(form.domains),
     }
 
@@ -273,9 +286,8 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
         settingsBaseUrl = settings.baseUrl ?? ''
         setGlobalBaseUrl(settingsBaseUrl)
       }
-      // resolution order mirrors the server: bot override -> global setting -> OpenAI
-      const effectiveBaseUrl =
-        form?.baseUrl.trim() || settingsBaseUrl || 'https://api.openai.com/v1'
+      // provider is global-only: Settings base URL, else OpenAI default
+      const effectiveBaseUrl = settingsBaseUrl || 'https://api.openai.com/v1'
       const data = await apiFetch<{ models: ModelOption[] }>(
         `/api/admin/models?baseUrl=${encodeURIComponent(effectiveBaseUrl)}`,
       )
@@ -308,10 +320,6 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
       </div>
     )
   }
-
-  const allModels = Array.from(
-    new Set(PROVIDER_PRESETS.flatMap((p) => p.models).concat(form.model)),
-  )
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
@@ -587,149 +595,129 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
           )}
         </section>
 
-        <details className="group rounded-xl border bg-card p-5 shadow-sm">
-          <summary className="cursor-pointer list-none text-base font-medium transition-colors duration-150 [&::-webkit-details-marker]:hidden group-open:mb-4">
-            Model & sampling
-          </summary>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <div className="flex items-center justify-between">
-                <label htmlFor="ed-model" className="text-sm font-medium">
-                  Model
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (modelOptions) {
-                      setModelOptions(null)
-                      setModelFilter('')
-                    } else {
-                      void loadModels()
-                    }
-                  }}
-                  className="text-[13px] font-medium text-primary underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  {modelsLoading
-                    ? 'Loading…'
-                    : modelOptions
-                      ? 'Close list'
-                      : 'Browse provider models'}
-                </button>
-              </div>
-              <input
-                id="ed-model"
-                list="model-presets"
-                type="text"
-                value={form.model}
-                onChange={(e) => set('model', e.target.value)}
-                className={`${inputClass} mt-1.5 font-mono`}
+        <section className="rounded-xl border bg-card p-5 shadow-sm">
+          <h2 className="text-base font-medium">Model</h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+            Served through the provider configured in Settings.
+          </p>
+
+          <div className="relative mt-3" ref={modelPickerRef}>
+            <button
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={modelPickerOpen}
+              aria-label={`Model: ${form.model || 'none selected'}`}
+              onClick={() => {
+                const next = !modelPickerOpen
+                setModelPickerOpen(next)
+                if (next && !modelOptions) void loadModels()
+              }}
+              className="flex w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2.5 text-left transition-[border-color,box-shadow] duration-150 hover:border-ring/60 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
+            >
+              <span className="min-w-0">
+                {(() => {
+                  const selected = modelOptions?.find((m) => m.id === form.model)
+                  return (
+                    <>
+                      <span className="block truncate text-sm">{selected?.name ?? form.model}</span>
+                      {selected && (
+                        <span className="block truncate font-mono text-xs text-muted-foreground">
+                          {selected.id}
+                        </span>
+                      )}
+                    </>
+                  )
+                })()}
+              </span>
+              <ChevronDown
+                className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${modelPickerOpen ? 'rotate-180' : ''}`}
               />
-              <datalist id="model-presets">
-                {allModels.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
+            </button>
 
-              {modelsError && (
-                <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {modelsError}
-                </p>
-              )}
-
-              {modelOptions && (
-                <div className="mt-2 overflow-hidden rounded-lg border">
+            {modelPickerOpen && (
+              <div className="absolute z-20 mt-1.5 w-full overflow-hidden rounded-lg border bg-popover shadow-lg">
+                <div className="border-b bg-muted/40 p-2">
                   <input
+                    ref={modelSearchRef}
                     type="text"
                     value={modelFilter}
                     onChange={(e) => setModelFilter(e.target.value)}
-                    placeholder={`Filter ${modelOptions.length} models…`}
-                    aria-label="Filter models"
-                    className="w-full border-b bg-muted/40 px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setModelPickerOpen(false)
+                      if (e.key === 'Enter' && filteredModels.length > 0) {
+                        const first = filteredModels[0]
+                        if (!first) return
+                        set('model', first.id)
+                        setModelPickerOpen(false)
+                      }
+                    }}
+                    placeholder={
+                      modelsLoading
+                        ? 'Loading models…'
+                        : `Search ${modelOptions?.length ?? 0} models…`
+                    }
+                    aria-label="Search models"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:border-ring"
                   />
-                  <ul className="max-h-72 divide-y overflow-y-auto">
-                    {modelOptions
-                      .filter((m) =>
-                        `${m.id} ${m.name}`.toLowerCase().includes(modelFilter.toLowerCase()),
-                      )
-                      .slice(0, 100)
-                      .map((m) => (
-                        <li key={m.id}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              set('model', m.id)
-                              setModelOptions(null)
-                              setModelFilter('')
-                            }}
-                            className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150 hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm">{m.name}</span>
-                              <span className="block truncate font-mono text-xs text-muted-foreground">
-                                {m.id}
-                              </span>
-                            </span>
-                            <span className="tnum shrink-0 text-right text-xs text-muted-foreground">
-                              {m.promptPricePerM !== null && (
-                                <span className="block">in ${fmtPrice(m.promptPricePerM)} / M</span>
-                              )}
-                              {m.completionPricePerM !== null && (
-                                <span className="block">
-                                  out ${fmtPrice(m.completionPricePerM)} / M
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
                 </div>
-              )}
-            </div>
-            <div>
-              <label htmlFor="ed-baseurl" className="text-sm font-medium">
-                Base URL override
-              </label>
-              <input
-                id="ed-baseurl"
-                type="url"
-                value={form.baseUrl}
-                onChange={(e) => set('baseUrl', e.target.value)}
-                placeholder="Uses the global provider"
-                className={`${inputClass} mt-1.5 font-mono`}
-              />
-            </div>
-            <div>
-              <label htmlFor="ed-temp" className="text-sm font-medium">
-                Temperature
-              </label>
-              <input
-                id="ed-temp"
-                type="number"
-                min={0}
-                max={2}
-                step={0.1}
-                value={form.temperature}
-                onChange={(e) => set('temperature', e.target.value)}
-                className={`${inputClass} mt-1.5 tnum`}
-              />
-            </div>
-            <div>
-              <label htmlFor="ed-maxtok" className="text-sm font-medium">
-                Max tokens
-              </label>
-              <input
-                id="ed-maxtok"
-                type="number"
-                min={16}
-                max={4000}
-                step={16}
-                value={form.maxTokens}
-                onChange={(e) => set('maxTokens', e.target.value)}
-                className={`${inputClass} mt-1.5 tnum`}
-              />
-            </div>
+                <ul role="listbox" className="max-h-72 divide-y overflow-y-auto">
+                  {modelsError && (
+                    <li className="px-3 py-3 text-sm text-destructive">{modelsError}</li>
+                  )}
+                  {modelsLoading &&
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <li key={i} className="px-3 py-2.5">
+                        <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+                        <div className="mt-1.5 h-3 w-56 animate-pulse rounded bg-muted" />
+                      </li>
+                    ))}
+                  {!modelsLoading &&
+                    filteredModels.map((m) => (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={m.id === form.model}
+                          onClick={() => {
+                            set('model', m.id)
+                            setModelPickerOpen(false)
+                            setModelFilter('')
+                          }}
+                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors duration-150 hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm">{m.name}</span>
+                            <span className="block truncate font-mono text-xs text-muted-foreground">
+                              {m.id}
+                            </span>
+                          </span>
+                          <span className="tnum shrink-0 text-right text-xs text-muted-foreground">
+                            {m.promptPricePerM !== null && (
+                              <span className="block">in ${fmtPrice(m.promptPricePerM)} / M</span>
+                            )}
+                            {m.completionPricePerM !== null && (
+                              <span className="block">
+                                out ${fmtPrice(m.completionPricePerM)} / M
+                              </span>
+                            )}
+                          </span>
+                          {m.id === form.model && (
+                            <Check className="size-4 shrink-0 text-primary" />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  {!modelsLoading && !modelsError && filteredModels.length === 0 && (
+                    <li className="px-3 py-6 text-center text-sm text-muted-foreground">
+                      No models match “{modelFilter}” — clear the search or type a custom id in the
+                      field above after closing.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
           </div>
+
           <label className="mt-4 flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -739,7 +727,7 @@ export function ChatbotEditor({ botId, onBack, onSaved, onDeleted, onPlayground 
             />
             Show “Powered by SiteLift” badge on the widget
           </label>
-        </details>
+        </section>
 
         <section className="rounded-xl border border-destructive/30 bg-card p-5 shadow-sm">
           <h2 className="text-base font-medium text-destructive">Danger zone</h2>

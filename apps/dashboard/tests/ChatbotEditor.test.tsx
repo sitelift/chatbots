@@ -141,11 +141,13 @@ describe('ChatbotEditor', () => {
     )
     await screen.findByLabelText('Name')
 
-    fireEvent.click(screen.getByText('Browse provider models'))
+    fireEvent.click(screen.getByLabelText(/Model: gpt-4o-mini/))
 
+    const searchBox = await screen.findByLabelText('Search models')
     await waitFor(() => {
-      expect(screen.getByText('OR Model')).toBeDefined()
+      expect(screen.getByRole('option', { name: /OR Model/ })).toBeDefined()
     })
+
     const catalogCall = fetchMock.mock.calls.find(([path]) =>
       String(path).startsWith('/api/admin/models'),
     )
@@ -153,10 +155,9 @@ describe('ChatbotEditor', () => {
       `/api/admin/models?baseUrl=${encodeURIComponent('https://openrouter.ai/api/v1')}`,
     )
 
-    fireEvent.click(screen.getByLabelText('Filter models'))
-    fireEvent.change(screen.getByLabelText('Filter models'), { target: { value: 'or' } })
-    fireEvent.click(screen.getByText('OR Model'))
-    expect((screen.getByLabelText('Model') as HTMLInputElement).value).toBe('or-model')
+    fireEvent.change(searchBox, { target: { value: 'or' } })
+    fireEvent.click(screen.getByRole('option', { name: /OR Model/ }))
+    expect(screen.getByLabelText('Model: or-model')).toBeDefined()
   })
 
   it('arms delete before sending DELETE', async () => {
