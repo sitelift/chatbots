@@ -3,6 +3,8 @@ import path from 'node:path'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
 import { env } from './env'
+import { auth } from './lib/auth'
+import { getSessionUser } from './lib/session'
 import { adminRoutes } from './routes/admin'
 import { health } from './routes/health'
 import { publicRoutes } from './routes/public'
@@ -13,8 +15,14 @@ export function createApp() {
   if (!env.isProd) app.use(logger())
 
   app.route('/health', health)
-  app.route('/api', publicRoutes)
+  app.get('/api/auth/me', async (c) => {
+    const user = await getSessionUser(c)
+    if (!user) return c.json({ error: { code: 'UNAUTHORIZED', message: 'Sign in required' } }, 401)
+    return c.json(user)
+  })
+  app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))
   app.route('/api/admin', adminRoutes)
+  app.route('/api', publicRoutes)
 
   app.get('/embed.js', async (c) => {
     const source = await readFile(env.widgetDistPath, 'utf8')

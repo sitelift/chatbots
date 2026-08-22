@@ -27,5 +27,4 @@ export const env = {
     process.env.DASHBOARD_DIST_PATH ??
     fileURLToPath(new URL('../../dashboard/dist', import.meta.url)),
   isProd: process.env.NODE_ENV === 'production',
-  adminToken: process.env.ADMIN_TOKEN ?? '',
 }

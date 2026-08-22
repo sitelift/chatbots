@@ -4,12 +4,23 @@ import { db } from '../src/db'
 import { settings } from '../src/db/schema'
 import { createApp } from '../src/index'
 import { resolveProviderCredentials } from '../src/services/settings'
-import { seedDemoChatbot, startMockProvider } from './helpers'
+import {
+  DEMO_CHATBOT_ID,
+  resetUsers,
+  seedDemoChatbot,
+  signUpUser,
+  startMockProvider,
+  type TestUser,
+} from './helpers'
 
-const AUTH = { Authorization: 'Bearer test-admin-token' }
+let agency: TestUser
 
-beforeAll(() => {
+const headers = () => ({ 'Content-Type': 'application/json', Cookie: agency.cookie })
+
+beforeAll(async () => {
   seedDemoChatbot()
+  resetUsers()
+  agency = await signUpUser('Owner')
 })
 
 afterAll(() => {
@@ -17,19 +28,13 @@ afterAll(() => {
 })
 
 describe('admin settings API', () => {
-  it('rejects requests without a valid token', async () => {
-    const app = createApp()
-    const noToken = await app.request('/api/admin/settings')
-    expect(noToken.status).toBe(401)
-
-    const badToken = await app.request('/api/admin/settings', {
-      headers: { Authorization: 'Bearer wrong' },
-    })
-    expect(badToken.status).toBe(401)
+  it('rejects unauthenticated requests', async () => {
+    const res = await createApp().request('/api/admin/settings')
+    expect(res.status).toBe(401)
   })
 
   it('reports env-provided key before anything is stored', async () => {
-    const res = await createApp().request('/api/admin/settings', { headers: AUTH })
+    const res = await createApp().request('/api/admin/settings', { headers: headers() })
     expect(res.status).toBe(200)
     const view = await res.json()
     expect(view.hasKey).toBe(true)
@@ -41,7 +46,7 @@ describe('admin settings API', () => {
     const app = createApp()
     const put = await app.request('/api/admin/settings', {
       method: 'PUT',
-      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      headers: headers(),
       body: JSON.stringify({ apiKey: 'sk-live-abcd1234efgh', baseUrl: 'http://127.0.0.1:4107/v1' }),
     })
     expect(put.status).toBe(200)
@@ -71,7 +76,7 @@ describe('admin settings API', () => {
     let mock: Server | undefined
     try {
       mock = await startMockProvider(4107)
-      const res = await createApp().request('/api/chat/ch_demo/messages', {
+      const res = await createApp().request(`/api/chat/${DEMO_CHATBOT_ID}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visitorId: 'visitor_settings_01', content: 'hello' }),

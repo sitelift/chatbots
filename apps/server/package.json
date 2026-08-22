@@ -13,9 +13,10 @@
   "dependencies": {
     "@hono/node-server": "^1.14.0",
     "@sitelift/shared": "workspace:*",
+    "better-auth": "^1.7.1",
     "better-sqlite3": "^12.2.0",
     "dotenv": "^17.2.0",
-    "drizzle-orm": "^0.44.0",
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.9.0",
     "pino": "^9.7.0",
     "tsx": "^4.20.0",

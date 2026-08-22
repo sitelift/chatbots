@@ -1,7 +1,9 @@
 import type { Server } from 'node:http'
 import { createServer } from 'node:http'
+import { eq } from 'drizzle-orm'
 import { db } from '../src/db'
-import { chatbots } from '../src/db/schema'
+import { chatbots, user } from '../src/db/schema'
+import { createApp } from '../src/index'
 
 export const DEMO_CHATBOT_ID = 'ch_demo'
 
@@ -14,6 +16,60 @@ export function seedDemoChatbot(): void {
     })
     .onConflictDoNothing()
     .run()
+}
+
+export interface TestUser {
+  email: string
+  password: string
+  name: string
+  cookie: string
+}
+
+let userCounter = 0
+
+function cookieFrom(res: Response): string {
+  const raw = res.headers.get('set-cookie') ?? ''
+  return raw
+    .split(/,(?=[^;]+=[^;]+)/)
+    .map((part) => part.split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ')
+}
+
+export async function signUpUser(name?: string): Promise<TestUser> {
+  const n = ++userCounter
+  const email = `user-${Date.now()}-${n}@test.dev`
+  const password = `password-${n}-abcdef`
+  const res = await createApp().request('/api/auth/sign-up/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, name: name ?? `User ${n}` }),
+  })
+  if (!res.ok) {
+    throw new Error(`sign-up failed: ${res.status} ${await res.text()}`)
+  }
+  return { email, password, name: name ?? `User ${n}`, cookie: cookieFrom(res) }
+}
+
+export async function signInUser(email: string, password: string): Promise<TestUser> {
+  const res = await createApp().request('/api/auth/sign-in/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  if (!res.ok) {
+    throw new Error(`sign-in failed: ${res.status} ${await res.text()}`)
+  }
+  return { email, password, name: '', cookie: cookieFrom(res) }
+}
+
+export async function getUserRole(email: string): Promise<'agency' | 'client'> {
+  const row = await db.select().from(user).where(eq(user.email, email)).get()
+  return (row?.role as 'agency' | 'client') ?? 'client'
+}
+
+export function resetUsers(): void {
+  db.delete(user).run()
 }
 
 export function startMockProvider(port = 4107): Promise<Server> {
