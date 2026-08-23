@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { Bot, FlaskConical, MessageSquare, Settings, TrendingUp, Users, Zap } from 'lucide-react'
+import { Logo } from './Logo'
 
 const nav = [
   { path: '/', label: 'Overview', icon: TrendingUp, enabled: true },
@@ -21,11 +22,8 @@ export function Sidebar({ pathname }: { pathname: string }) {
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-      <div className="flex h-14 items-center gap-2.5 px-5">
-        <div className="grid size-7 place-items-center rounded-lg bg-primary text-primary-foreground">
-          <Bot className="size-4" />
-        </div>
-        <span className="text-[15px] font-semibold tracking-tight">SiteLift</span>
+      <div className="flex h-14 items-center px-5">
+        <Logo className="h-[22px] w-auto text-foreground" />
       </div>
       <nav className="flex flex-col gap-0.5 px-3 py-3">
         {nav.map(({ path, label, icon: Icon, enabled }) => (

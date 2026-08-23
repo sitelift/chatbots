@@ -3,7 +3,7 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** after commit `01010ce` + auth-page polish (uncommitted): split-screen sign-on, password confirmation, fresh-install signup routing, bootstrap endpoint.
+> **Last updated:** after commit `01010ce` + uncommitted polish: split-screen sign-on, password confirmation, fresh-install signup routing, bootstrap endpoint, **rebrand to wordmark logo**.
 
 ---
 
@@ -68,6 +68,8 @@
   after successful auth (was: stuck on `/login`); session check on mount redirects authed users;
   `GET /api/auth/bootstrap` → `{ hasUsers }` and **fresh installs land on sign-up** (sign-in hidden
   until an account exists); `skeleton` shimmer utility + `inputInvalidClass` added to design system
+- **Rebrand:** robot-in-box logo replaced by the SiteLift wordmark (`Logo.tsx`, `currentColor`,
+  theme-adaptive) in sidebar + login; old robot icon saved at `assets/bot-icon.svg` for later reuse
 </details>
 
 ## Known gaps / tech debt (honest)
