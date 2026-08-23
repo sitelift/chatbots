@@ -110,6 +110,11 @@ docker compose -f docker/docker-compose.yml up -d --build
 <details>
 <summary><strong>Click to expand — each one cost real debugging time</strong></summary>
 
+- **Keep local stuff local — never commit what shouldn't be in the repo.** Real-world lesson:
+  `apps/server/data/*.db` was committed to GitHub (the `.gitignore` `data/*.db` pattern only matched a
+  root-level `data/` dir, not `apps/server/data/`). Cloning the repo shipped a pre-existing SQLite DB
+  with someone else's account to a fresh machine. Fix: gitignore the dir, `git rm --cached` any tracked
+  data, verify with `git check-ignore <path>`, and check `git status` before every commit.
 - **better-sqlite3 native build**: pnpm blocks postinstall by default — needs
   `pnpm.onlyBuiltDependencies` in root package.json + `pnpm rebuild better-sqlite3` if missed.
 - **dotenv**: resolves `.env` from cwd — server runs from `apps/server`, so env.ts walks UP
