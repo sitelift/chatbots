@@ -3,7 +3,7 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** after commit `01010ce` — routing migration complete, all gates green.
+> **Last updated:** after commit `01010ce` + auth-page polish (uncommitted): split-screen sign-on, password confirmation, fresh-install signup routing, bootstrap endpoint.
 
 ---
 
@@ -13,7 +13,7 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 35 passing (24 server · 11 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 42 passing (26 server · 16 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
@@ -62,6 +62,12 @@
   (`GET /api/admin/models?baseUrl=` — cached 10 min, forwards stored key, SSRF allowlist)
 - Design system: `lib/ui.ts` field tokens (filled inputs, muted labels), custom ColorField picker,
   native-style scrollbars, STYLE.md release-gate checklist
+- **Auth page (polish):** split-screen brand panel (Linear/Vercel-style) + form column; segmented
+  Sign in / Create account toggle; field-level validation (email format, 10-char min, password
+  confirmation) with inline errors; show/hide password + monochrome strength meter; redirect to `/`
+  after successful auth (was: stuck on `/login`); session check on mount redirects authed users;
+  `GET /api/auth/bootstrap` → `{ hasUsers }` and **fresh installs land on sign-up** (sign-in hidden
+  until an account exists); `skeleton` shimmer utility + `inputInvalidClass` added to design system
 </details>
 
 ## Known gaps / tech debt (honest)

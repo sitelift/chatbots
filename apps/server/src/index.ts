@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
+import { db } from './db'
+import { user } from './db/schema'
 import { env } from './env'
 import { auth } from './lib/auth'
 import { getSessionUser } from './lib/session'
@@ -19,6 +22,10 @@ export function createApp() {
     const user = await getSessionUser(c)
     if (!user) return c.json({ error: { code: 'UNAUTHORIZED', message: 'Sign in required' } }, 401)
     return c.json(user)
+  })
+  app.get('/api/auth/bootstrap', async (c) => {
+    const [row] = await db.select({ count: sql<number>`count(*)` }).from(user)
+    return c.json({ hasUsers: Number(row?.count ?? 0) > 0 })
   })
   app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))
   app.route('/api/admin', adminRoutes)

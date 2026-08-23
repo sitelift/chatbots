@@ -26,3 +26,10 @@ export const AUTH_ROUTES = {
 // Every user after that is `client` and must be assigned chatbots
 // by the agency before they can see anything.
 export const FIRST_USER_IS_AGENCY = true
+
+// Fresh-install detection: the dashboard routes to sign-up instead of
+// sign-in when the database has no accounts yet.
+export const bootstrapResponseSchema = z.object({
+  hasUsers: z.boolean(),
+})
+export type BootstrapResponse = z.infer<typeof bootstrapResponseSchema>

@@ -32,10 +32,10 @@ const AUTH_ME_RESPONSE = {
 }
 
 export function stubApi(routes: StubRoute[]) {
-  const all = [
-    { method: 'GET', path: '/api/auth/me', status: 200, body: AUTH_ME_RESPONSE },
-    ...routes,
-  ]
+  const hasMeRoute = routes.some((r) => r.path === '/api/auth/me')
+  const all = hasMeRoute
+    ? routes
+    : [{ method: 'GET', path: '/api/auth/me', status: 200, body: AUTH_ME_RESPONSE }, ...routes]
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET'
     const hit = all.find(

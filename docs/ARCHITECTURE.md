@@ -62,7 +62,7 @@ Hono application. Route groups:
 | Area | Routes | Auth |
 | --- | --- | --- |
 | Public chat | `GET /api/chatbots/:id` (public metadata) · `POST /api/chat/:chatbotId/messages` · `POST /api/chat/:chatbotId/messages/stream` (SSE) | none; origin checked against chatbot's domain allowlist |
-| Auth | better-auth mounted routes (email+password, passkeys, sessions) | rate-limited |
+| Auth | better-auth mounted routes (email+password, passkeys, sessions) · `GET /api/auth/me` (current user) · `GET /api/auth/bootstrap` (fresh-install detection → `{ hasUsers }`) | rate-limited |
 | Dashboard API | chatbots CRUD, clients, conversations, leads, analytics, settings, scrape import | better-auth session; role-scoped queries |
 | Static | `/admin/*` (SPA), `/embed.js` (cacheable `public, max-age=600`) | none |
 
@@ -88,7 +88,7 @@ One React SPA at `/admin` (login included), built on **TanStack Router** (code-b
 
 | Path | View | Notes |
 | --- | --- | --- |
-| `/login` | Sign-in / sign-up | Outside the guarded layout |
+| `/login` | Sign-in / sign-up | Outside the guarded layout; defaults to **sign-up** when `GET /api/auth/bootstrap` reports an empty database |
 | `/` | Overview | Live counts |
 | `/chatbots` | List (+ `?new=1` opens create) | URL-driven intent |
 | `/chatbots/$botId` | Full chatbot editor | Deep-linkable per client |
