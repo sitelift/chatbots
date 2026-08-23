@@ -3,9 +3,8 @@ dist/
 *.tsbuildinfo
 .env
 .env.local
-data/*.db
-data/*.db-shm
-data/*.db-wal
+data/
+apps/server/data/
 .DS_Store
 coverage/
 .vite/
