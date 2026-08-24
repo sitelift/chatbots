@@ -70,7 +70,7 @@ The agency dashboard and owner portal are **one application with role-based scop
 
 | Feature | Notes |
 | --- | --- |
-| Edit own business facts, welcome message, appearance + test playground | Decided: clients edit directly, no approval queue |
+| Edit own business facts, welcome message, appearance + in-editor Test preview | Decided: clients edit directly, no approval queue |
 | Chat history, lead list, CSV export | Table stakes |
 | Instant email notification when a lead is captured | SMTP configured by the agency; email-only for v1 |
 | Stats view: conversations/leads trend, popular questions | Owners must *see* ROI or they churn |

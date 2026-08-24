@@ -16,7 +16,6 @@ import { ChatbotEditor } from './pages/ChatbotEditor'
 import { ChatbotsPage } from './pages/Chatbots'
 import { LoginPage } from './pages/Login'
 import { Overview } from './pages/Overview'
-import { PlaygroundPage } from './pages/Playground'
 import { SettingsPage } from './pages/Settings'
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -108,15 +107,6 @@ export function buildRouteTree(options?: { authGuard?: boolean }) {
     component: EditorRoute,
   })
 
-  const playgroundRoute = createRoute({
-    getParentRoute: () => layoutRoute,
-    path: '/playground',
-    validateSearch: (search: Record<string, unknown>) => ({
-      bot: typeof search.bot === 'string' && search.bot ? search.bot : undefined,
-    }),
-    component: PlaygroundPage,
-  })
-
   const settingsRoute = createRoute({
     getParentRoute: () => layoutRoute,
     path: '/settings',
@@ -125,13 +115,7 @@ export function buildRouteTree(options?: { authGuard?: boolean }) {
 
   return rootRoute.addChildren([
     loginRoute,
-    layoutRoute.addChildren([
-      indexRoute,
-      chatbotsRoute,
-      chatbotEditRoute,
-      playgroundRoute,
-      settingsRoute,
-    ]),
+    layoutRoute.addChildren([indexRoute, chatbotsRoute, chatbotEditRoute, settingsRoute]),
   ])
 }
 

@@ -3,29 +3,9 @@ import { useNavigate, useSearch } from '@tanstack/react-router'
 import { Bot, LoaderCircle, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { ColorField } from '../components/ColorField'
+import { StatusBadge } from '../components/StatusBadge'
 import { type AdminApiError, apiFetch } from '../lib/api'
 import { inputClass, labelClass } from '../lib/ui'
-
-function StatusBadge({ status }: { status: ChatbotAdminView['status'] }) {
-  const styles = {
-    active: 'bg-success/10 text-success',
-    paused: 'bg-warning/10 text-warning',
-    archived: 'bg-muted text-muted-foreground',
-  }[status]
-  const dot = {
-    active: 'bg-success',
-    paused: 'bg-warning',
-    archived: 'bg-muted-foreground/50',
-  }[status]
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${styles}`}
-    >
-      <span className={`size-1.5 rounded-full ${dot}`} />
-      {status}
-    </span>
-  )
-}
 
 interface CreateFormProps {
   busy: boolean
@@ -258,7 +238,7 @@ export function ChatbotsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
+    <div className="mx-auto max-w-[1200px] px-6 py-10">
       <h1 className="text-3xl font-semibold tracking-tight">Chatbots</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
         One chatbot per client website. Pause one to stop token spend instantly.
@@ -306,8 +286,16 @@ export function ChatbotsPage() {
         )}
 
         {bots === null ? (
-          <div className="grid place-items-center py-16 text-muted-foreground">
-            <LoaderCircle className="size-5 animate-spin" />
+          <div className="space-y-3 px-5 py-5">
+            {['acme', 'bella', 'nova'].map((id) => (
+              <div key={id} className="flex items-center gap-6">
+                <div className="flex-1 space-y-2">
+                  <div className="skeleton h-4 w-44 rounded" />
+                  <div className="skeleton h-3 w-32 rounded" />
+                </div>
+                <div className="skeleton h-5 w-16 rounded-full" />
+              </div>
+            ))}
           </div>
         ) : bots.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-14 text-center">

@@ -3,7 +3,7 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** after commit `01010ce` + uncommitted polish: split-screen sign-on, password confirmation, fresh-install signup routing, bootstrap endpoint, **rebrand to wordmark logo**.
+> **Last updated:** after the multi-page import crawl (same-origin pages combined) and the import now using the chatbot's model.
 
 ---
 
@@ -13,7 +13,7 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 42 passing (26 server · 16 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 60 passing (38 server · 22 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
@@ -49,14 +49,14 @@
 <summary><strong>Routing & UX (DONE)</strong></summary>
 
 - **TanStack Router**, code-based tree: `/login` · `/` · `/chatbots(?new=1)` ·
-  `/chatbots/$botId` · `/playground?bot=` · `/settings`; auth-guarded layout;
+  `/chatbots/$botId` · `/settings`; auth-guarded layout;
   prod basepath `/admin` (Hono SPA-fallbacks `/admin/*`)
 - Refresh / back / forward / deep links work everywhere
 - Overview: live counts from API, working buttons, recent-bots list
 - Chatbots list: create/pause/delete (two-step confirm), rows deep-link to editor
 - ChatbotEditor: full field editing incl. structured facts + FAQ pairs + prompt preview,
   danger-zone delete, jump-to-playground
-- Playground: bot selector bound to URL, embed-snippet copy, iframe keyed remount
+- Test tab: interactive widget preview answering from draft facts; Playground page removed
 - Settings: provider presets (OpenAI/OpenRouter/Groq/DeepSeek/Ollama/custom),
   AES-256-GCM encrypted key storage w/ hint, model catalog browsing
   (`GET /api/admin/models?baseUrl=` — cached 10 min, forwards stored key, SSRF allowlist)
@@ -70,6 +70,71 @@
   until an account exists); `skeleton` shimmer utility + `inputInvalidClass` added to design system
 - **Rebrand:** robot-in-box logo replaced by the SiteLift wordmark (`Logo.tsx`, `currentColor`,
   theme-adaptive) in sidebar + login; old robot icon saved at `assets/bot-icon.svg` for later reuse
+</details>
+
+<details>
+<summary><strong>Tabbed chatbot editor + website import (DONE)</strong></summary>
+
+- **ChatbotEditor rebuilt as four tabs** — **Leads** (default), **Knowledge**, **Test**, **Settings**.
+  Cleaner split: set-once fields (name, domains, color, model, status, embed snippet, delete)
+  live behind Settings; Knowledge owns welcome/quick replies + the facts; Leads proves value on load.
+- **Test tab**: an interactive widget preview styled like the real embed — bubble button in the
+  bot's brand color, panel with avatar/name/online dot, welcome message, quick-reply chips and a
+  composer that answers from the *draft* facts via `POST /api/admin/chatbots/:id/test` (nothing
+  persisted). The separate Playground page/route/sidebar item and the `/demo` page are gone.
+- **Leads tab**: `GET /api/admin/chatbots/:id/leads` — recent conversations with captured
+  name/email, last message, message count. Empty state teaches what a lead is.
+- **Knowledge tab**: fact sections labeled by topic with the visitor question folded into the hint
+  ("Who are you? — What you do, since when, what makes you different."), one-click example
+  templates; numbered FAQ pairs ("01/02/…") with a running `n/50` count; coverage checklist
+  ("3 of 7 covered"); a plain **Misc** textarea at the bottom that goes straight into the facts JSON.
+- **Website import**: `POST /api/admin/import` — SSRF-safe crawl (DNS + private-range blocking,
+  redirect caps, text extraction) → LLM reads the site and fills the `businessFactsSchema` JSON
+  (incl. up to 20 FAQ pairs, `maxTokens` 8000). Dashboard shows what was read and applies it as an
+  editable draft.
+- **Facts schema reworked**: `products`→`services`, `misc`→`policies`, new `location`, `pricing`,
+  and a big `misc` freeform field (12k cap, bottom of the form); `composeSystemPrompt` sections
+  updated to match (ABOUT US / HOURS / LOCATION & SERVICE AREA / CONTACT / SERVICES / PRICING /
+  POLICIES & NOTES / MISC). **Raw-prompt mode removed** — facts-only editing, no "edit as plain
+  prompt".
+- All-LLM extraction (no deterministic parsers): provider `completeJson()` (non-streaming,
+  `response_format: json_object`), one retry with error feedback.
+- `temperature`/`maxTokens`/per-bot `baseUrl` remain schema-only — deliberately no UI (global-only).
+</details>
+
+<details>
+<summary><strong>Leads graphs + editor taste pass (DONE)</strong></summary>
+
+- **Activity stats on the Leads tab** (above the inbox): new `GET /api/admin/chatbots/:id/stats?days=30`
+  buckets conversations/leads/messages per local day (7–90 window, clamped); shared
+  `chatbotStatsSchema`. Dashboard renders an `ActivityCard` (dependency-free CSS bars —
+  conversations in muted gray, leads in ink; hover tooltips; sparse x labels) plus four stat tiles
+  (conversations · leads · lead rate · msgs/conversation). Skeleton loading, teaching empty state,
+  and silent-hide if stats fetch fails (inbox never breaks because of it).
+- **Editor taste/copy pass**: unified `StatusBadge` component (dot + tint) across list + editor;
+  dirty tracking with a floating Unsaved-changes pill (Save / Discard) replacing the always-on
+  header button; "Saved" toast bottom-right instead of layout-shifting banner;
+  beforeunload + confirm-on-back guards; skeleton page/list/inbox loading (spinners only inline);
+  leads rows use human initials avatars + `tnum`; "latest 25" cap note; empty-state icons in muted
+  circles; content width 1200px on Overview/Chatbots/editor.
+- **Knowledge tab**: "Show example" hides once a field has content (no more silent overwrite);
+  coverage checklist items jump-and-focus their field; FAQ add explains the 50-cap; quick-reply
+  placeholder reads naturally ("Opening hours, Pricing, Book a visit"); Misc hint no longer leaks
+  "prompt JSON"; ImportReview button says "Use these facts".
+- **Knowledge redesign (Notion-doc)**: dropped the per-field boxes and the quoted primary-color
+  questions. Sections are now plain hairline-separated groups — topic label as the heading, the
+  visitor question folded into a one-line hint, textareas directly beneath. Numbered FAQ pairs
+  ("01 / 02 / …") with a live `n/50` counter. The collapsible "Preview final prompt" is gone —
+  the assembled prompt now lives in the right sticky pane as a first-class card (with a Copy
+  button) next to the coverage checklist ("Visitors will ask"), which was restored after an
+  experiment folding it into the facts header as jump-to pills proved less discoverable.
+- **Fresh-bot default tab**: bots without facts open on Knowledge (not an empty inbox).
+- **Test tab stage**: fake browser chrome dropped for a believable mini client-site mock on a dotted
+  canvas ("Your client's website" caption); widget-sim palette extracted to a named `WIDGET` const
+  (light-locked by design — the widget renders on host pages, not in our token system).
+- **Robustness**: `lib/uid.ts` falls back when `crypto.randomUUID` is missing (plain-HTTP LAN
+  deployments have no secure context); model-picker empty state no longer references a removed
+  custom-id field.
 </details>
 
 ## Known gaps / tech debt (honest)
@@ -93,7 +158,8 @@
    bots (server-side scoping for client role on chatbots/conversations is NOT implemented yet —
    add `requireRole('agency')` alternatives + ownership filters).
 2. **Lead-capture emails** — SMTP settings surface, `nodemailer`, trigger when visitor name/email
-   captured (detect in chat route), digest option later.
+   captured (detect in chat route), digest option later. The editor's Leads tab already lists
+   captured leads; the email notification is the missing push.
 3. **Conversations browser + analytics** — per-bot thread view, leads inbox, trends/top-questions/
    knowledge-gaps cards; token spend from stored usage columns.
 4. **White-label polish** — agency branding tokens, powered-by default toggle wiring.
@@ -147,6 +213,20 @@ docker compose -f docker/docker-compose.yml up -d --build
 ## Commit trail (this rebuild)
 
 ```
+<uncommitted> feat: import section hides once facts exist; "Clear all facts" danger zone returns it
+<uncommitted> feat: import extraction — terse direct facts, no missing-info commentary, booking URLs kept verbatim
+<uncommitted> feat: import crawls same-origin pages (up to 5, 60k chars) and uses the chatbot's model
+<uncommitted> design: restore "Visitors will ask" checklist beside the Final prompt preview
+<uncommitted> design: knowledge tab — coverage checklist becomes jump-to pills in the facts header; preview owns the right pane w/ copy button
+<uncommitted> feat: system prompt now embeds facts as JSON — composeSystemPrompt + preview show the exact JSON block
+<uncommitted> feat: import pushes 15–20 FAQ pairs (was effectively ~5); dropped the wand icon from the Import button
+<uncommitted> feat: import accepts scheme-less URLs — normalized to https at the schema edge, SSRF checks unchanged
+<uncommitted> design: knowledge editor as Notion-doc — hairline sections, numbered FAQs, side-pane prompt preview
+<uncommitted> feat: import up to 20 FAQ pairs (maxTokens 8000)
+<uncommitted> feat: leads activity graphs (stats endpoint, tiles, 30-day bars)
+<uncommitted> design: editor taste pass — dirty bar, skeletons, badges, copy
+<uncommitted> feat: tabbed chatbot editor (Leads/Knowledge/Test/Settings) + all-LLM website import
+<uncommitted> refactor: remove Playground + raw-prompt mode, add Test tab + Misc field
 01010ce docs: document URL routing architecture and routes table
 833509a feat: real URL routing — TanStack Router across the dashboard
 f82136b feat: live model catalog browsing per provider

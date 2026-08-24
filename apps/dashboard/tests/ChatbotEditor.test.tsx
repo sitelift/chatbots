@@ -4,6 +4,12 @@ import { renderAtLocation, stubApi } from './router'
 
 const now = '2026-01-01T00:00:00.000Z'
 
+const EMPTY_STATS = {
+  windowDays: 30,
+  days: [{ date: '2026-01-01', conversations: 0, leads: 0, messages: 0 }],
+  totals: { conversations: 0, leads: 0, conversionRate: 0, avgMessagesPerConversation: 0 },
+}
+
 function view(overrides: Record<string, unknown> = {}) {
   return {
     id: 'ch_edit1',
@@ -33,17 +39,108 @@ function view(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function editorStub(overrides: Record<string, unknown> = {}) {
+  return stubApi([
+    { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view(overrides) },
+    { path: '/api/admin/chatbots/ch_edit1/leads', method: 'GET', status: 200, body: { leads: [] } },
+    {
+      path: '/api/admin/chatbots/ch_edit1/stats',
+      method: 'GET',
+      status: 200,
+      body: EMPTY_STATS,
+    },
+  ])
+}
+
+async function openTab(label: string) {
+  fireEvent.click(await screen.findByRole('tab', { name: label }))
+}
+
 describe('ChatbotEditor', () => {
-  it('prefills structured facts from the loaded chatbot', async () => {
-    stubApi([{ path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() }])
+  it('defaults to the leads tab and shows captured leads', async () => {
+    stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
+      {
+        path: '/api/admin/chatbots/ch_edit1/leads',
+        method: 'GET',
+        status: 200,
+        body: {
+          leads: [
+            {
+              id: 'cv_1',
+              visitorName: 'Maria',
+              visitorEmail: 'maria@test.dev',
+              lastMessage: 'My AC is blowing warm air',
+              messageCount: 4,
+              createdAt: now,
+            },
+          ],
+        },
+      },
+      {
+        path: '/api/admin/chatbots/ch_edit1/stats',
+        method: 'GET',
+        status: 200,
+        body: EMPTY_STATS,
+      },
+    ])
     renderAtLocation('/chatbots/ch_edit1')
 
-    const nameInput = (await screen.findByLabelText('Name')) as HTMLInputElement
-    expect(nameInput.value).toBe('Acme HVAC')
-    expect((screen.getByLabelText(/Quick replies/i) as HTMLInputElement).value).toBe('Hours?')
-    expect((screen.getByLabelText('Business overview') as HTMLTextAreaElement).value).toBe(
+    expect(await screen.findByText('Maria')).toBeDefined()
+    expect(screen.getByText('maria@test.dev')).toBeDefined()
+    expect(screen.getByText(/My AC is blowing warm air/)).toBeDefined()
+  })
+
+  it('renders 30-day activity stats above the leads inbox', async () => {
+    stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
+      {
+        path: '/api/admin/chatbots/ch_edit1/leads',
+        method: 'GET',
+        status: 200,
+        body: { leads: [] },
+      },
+      {
+        path: '/api/admin/chatbots/ch_edit1/stats',
+        method: 'GET',
+        status: 200,
+        body: {
+          windowDays: 30,
+          days: [{ date: '2026-01-01', conversations: 4, leads: 1, messages: 11 }],
+          totals: {
+            conversations: 12,
+            leads: 3,
+            conversionRate: 0.25,
+            avgMessagesPerConversation: 5.5,
+          },
+        },
+      },
+    ])
+    renderAtLocation('/chatbots/ch_edit1')
+
+    expect(await screen.findByText('Last 30 days')).toBeDefined()
+    expect(screen.getByText('Leads captured')).toBeDefined()
+    expect(screen.getByText('25%')).toBeDefined()
+    expect(screen.getByText('Msgs / conversation')).toBeDefined()
+  })
+
+  it('lands fresh bots without facts on the Knowledge tab', async () => {
+    editorStub({ facts: null })
+    renderAtLocation('/chatbots/ch_edit1')
+
+    expect(await screen.findByText('Import a website')).toBeDefined()
+    expect(screen.queryByText('Captured leads')).toBeNull()
+  })
+
+  it('prefills structured facts on the Knowledge tab', async () => {
+    editorStub()
+    renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Knowledge')
+
+    expect(((await screen.findByLabelText('About us')) as HTMLTextAreaElement).value).toBe(
       'Family HVAC in Austin.',
     )
+    expect((screen.getByLabelText('Hours') as HTMLTextAreaElement).value).toBe('Mon–Fri 8–6')
   })
 
   it('saves edited fields through PUT', async () => {
@@ -53,6 +150,7 @@ describe('ChatbotEditor', () => {
       { path: '/api/admin/chatbots/ch_edit1', method: 'PUT', status: 200, body: updated },
     ])
     renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Settings')
 
     fireEvent.change(await screen.findByLabelText('Name'), {
       target: { value: 'Acme HVAC & Cooling' },
@@ -60,9 +158,8 @@ describe('ChatbotEditor', () => {
     fireEvent.click(screen.getByText('Save changes'))
 
     await waitFor(() => {
-      expect(screen.getByText('Saved.')).toBeDefined()
+      expect(screen.getByText('Saved')).toBeDefined()
     })
-    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Acme HVAC & Cooling')
 
     const putCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')
     expect(putCall?.[0]).toBe('/api/admin/chatbots/ch_edit1')
@@ -102,6 +199,7 @@ describe('ChatbotEditor', () => {
       },
     ])
     renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Settings')
 
     fireEvent.click(await screen.findByLabelText(/Model: gpt-4o-mini/))
     const searchBox = await screen.findByLabelText('Search models')
@@ -127,6 +225,7 @@ describe('ChatbotEditor', () => {
       { path: '/api/admin/chatbots/ch_edit1', method: 'DELETE', status: 204 },
     ])
     renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Settings')
     await screen.findByLabelText('Name')
 
     fireEvent.click(screen.getByLabelText('Delete Acme HVAC'))
@@ -136,5 +235,98 @@ describe('ChatbotEditor', () => {
     await waitFor(() => {
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1)
     })
+  })
+
+  it('imports facts from a website and applies them', async () => {
+    const fetchMock = stubApi([
+      {
+        path: '/api/admin/chatbots/ch_edit1',
+        method: 'GET',
+        status: 200,
+        body: view({ facts: null }),
+      },
+      {
+        path: '/api/admin/import',
+        method: 'POST',
+        status: 200,
+        body: {
+          source: 'https://acme.com',
+          facts: {
+            overview: 'Acme HVAC imports!',
+            hours: 'Mon–Fri 8am–6pm',
+            services: 'Repairs and installs',
+            faqs: [{ q: 'Emergency?', a: 'Yes 24/7.' }],
+          },
+        },
+      },
+    ])
+    renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Knowledge')
+
+    fireEvent.change(await screen.findByLabelText('Website URL to import'), {
+      target: { value: 'https://acme.com' },
+    })
+    fireEvent.click(screen.getByText('Import'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Read 3 of 8 sections/)).toBeDefined()
+    })
+    fireEvent.click(screen.getByText('Use these facts'))
+
+    await waitFor(() => {
+      expect((screen.getByLabelText('About us') as HTMLTextAreaElement).value).toBe(
+        'Acme HVAC imports!',
+      )
+    })
+    expect(
+      fetchMock.mock.calls.find(([path]) => String(path) === '/api/admin/import'),
+    ).toBeDefined()
+  })
+
+  it('tests the bot with current facts', async () => {
+    stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
+      {
+        path: '/api/admin/chatbots/ch_edit1/test',
+        method: 'POST',
+        status: 200,
+        body: { reply: 'We are open Mon–Fri 8–6.' },
+      },
+    ])
+    renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Test')
+
+    fireEvent.change(await screen.findByLabelText('Test message'), {
+      target: { value: 'What are your hours?' },
+    })
+    fireEvent.click(screen.getByLabelText('Send message'))
+
+    await waitFor(() => {
+      expect(screen.getByText('We are open Mon–Fri 8–6.')).toBeDefined()
+    })
+  })
+
+  it('shows coverage for filled facts', async () => {
+    editorStub()
+    renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Knowledge')
+
+    expect(await screen.findByText(/3 of 7 covered/)).toBeDefined()
+  })
+
+  it('hides import once facts exist and clears them from the danger zone', async () => {
+    editorStub()
+    renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Knowledge')
+
+    expect(await screen.findByLabelText('Clear all facts')).toBeDefined()
+    expect(screen.queryByLabelText('Website URL to import')).toBeNull()
+
+    fireEvent.click(screen.getByLabelText('Clear all facts'))
+    fireEvent.click(screen.getByLabelText('Confirm clear all facts'))
+
+    expect((screen.getByLabelText('About us') as HTMLTextAreaElement).value).toBe('')
+    expect(screen.queryByLabelText('Clear all facts')).toBeNull()
+    expect(screen.getByLabelText('Website URL to import')).toBeDefined()
   })
 })

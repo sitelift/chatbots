@@ -27,3 +27,6 @@ window.addEventListener('unhandledrejection', (e) => {
   // eslint-disable-next-line no-console
   console.log('[UNHANDLED REJECTION]:', e.reason?.message ?? e.reason)
 })
+
+Element.prototype.scrollIntoView = () => {}
+window.scrollTo = () => {}

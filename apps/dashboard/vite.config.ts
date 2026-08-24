@@ -9,7 +9,6 @@ export default defineConfig({
     proxy: {
       '/api': 'http://127.0.0.1:3000',
       '/health': 'http://127.0.0.1:3000',
-      '/demo': 'http://127.0.0.1:3000',
       '/embed.js': 'http://127.0.0.1:3000',
     },
   },

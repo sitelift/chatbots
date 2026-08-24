@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Bot, FlaskConical, MessageSquare, Settings, TrendingUp, Users, Zap } from 'lucide-react'
+import { Bot, MessageSquare, Settings, TrendingUp, Users, Zap } from 'lucide-react'
 import { Logo } from './Logo'
 
 const nav = [
@@ -8,7 +8,6 @@ const nav = [
   { path: '/conversations', label: 'Conversations', icon: MessageSquare, enabled: false },
   { path: '/leads', label: 'Leads', icon: Zap, enabled: false },
   { path: '/clients', label: 'Clients', icon: Users, enabled: false },
-  { path: '/playground', label: 'Playground', icon: FlaskConical, enabled: true },
   { path: '/settings', label: 'Settings', icon: Settings, enabled: true },
 ] as const
 

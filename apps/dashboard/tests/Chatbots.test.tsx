@@ -108,13 +108,19 @@ describe('ChatbotsPage', () => {
         path: '/api/admin/chatbots/ch_1',
         method: 'GET',
         status: 200,
-        body: bot('ch_1', 'Acme HVAC'),
+        body: { ...bot('ch_1', 'Acme HVAC'), facts: { overview: 'Family HVAC in Austin.' } },
+      },
+      {
+        path: '/api/admin/chatbots/ch_1/leads',
+        method: 'GET',
+        status: 200,
+        body: { leads: [] },
       },
     ])
     renderAtLocation('/chatbots')
 
     fireEvent.click(await screen.findByText('Acme HVAC'))
-    expect(await screen.findByText('Business facts')).toBeDefined()
+    expect(await screen.findByText('Captured leads')).toBeDefined()
   })
 
   it('arms delete before sending the DELETE request', async () => {

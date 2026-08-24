@@ -47,7 +47,7 @@ export function Overview() {
   ]
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
+    <div className="mx-auto max-w-[1200px] px-6 py-10">
       <h1 className="text-3xl font-semibold tracking-tight">Overview</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">A live view of every chatbot you run.</p>
 
