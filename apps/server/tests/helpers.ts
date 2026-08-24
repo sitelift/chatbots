@@ -78,12 +78,23 @@ export function getLastModelsAuthHeader(): string | null {
   return lastModelsAuthHeader
 }
 
+let jsonCompletionContent = ''
+let lastCompletionMessages: Array<{ role: string; content: string }> = []
+
+export function setJsonCompletionContent(content: string): void {
+  jsonCompletionContent = content
+}
+
+export function getLastCompletionMessages(): Array<{ role: string; content: string }> {
+  return lastCompletionMessages
+}
+
 export function startMockProvider(
   port = 4107,
   options?: { requireAuth?: boolean },
 ): Promise<Server> {
   return new Promise((resolve) => {
-    const server: Server = createServer((req, res) => {
+    const server: Server = createServer(async (req, res) => {
       if (req.method === 'GET' && req.url?.includes('/models')) {
         lastModelsAuthHeader = req.headers.authorization ?? null
         if (options?.requireAuth && lastModelsAuthHeader === null) {
@@ -107,6 +118,23 @@ export function startMockProvider(
         return
       }
       if (req.method === 'POST' && req.url?.includes('/chat/completions')) {
+        let body = ''
+        for await (const chunk of req) body += chunk
+        try {
+          lastCompletionMessages =
+            (JSON.parse(body) as { messages?: { role: string; content: string }[] }).messages ?? []
+        } catch {
+          lastCompletionMessages = []
+        }
+        if (jsonCompletionContent) {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              choices: [{ message: { role: 'assistant', content: jsonCompletionContent } }],
+            }),
+          )
+          return
+        }
         res.writeHead(200, { 'Content-Type': 'text/event-stream' })
         const chunks = [
           { choices: [{ delta: { role: 'assistant' } }] },
@@ -123,6 +151,33 @@ export function startMockProvider(
       }
       res.writeHead(404)
       res.end()
+    })
+    server.listen(port, '127.0.0.1', () => resolve(server))
+  })
+}
+
+export function startMockSite(html: string, port = 4110): Promise<Server> {
+  return new Promise((resolve) => {
+    const server: Server = createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end(html)
+    })
+    server.listen(port, '127.0.0.1', () => resolve(server))
+  })
+}
+
+export function startMockSiteRoutes(routes: Record<string, string>, port = 4111): Promise<Server> {
+  return new Promise((resolve) => {
+    const server: Server = createServer((req, res) => {
+      const path = req.url?.split('?')[0] ?? '/'
+      const html = routes[path]
+      if (html === undefined) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' })
+        res.end('not found')
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+      res.end(html)
     })
     server.listen(port, '127.0.0.1', () => resolve(server))
   })

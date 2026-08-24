@@ -94,9 +94,11 @@ describe('chatbot CRUD', () => {
       hours: 'Mon–Fri 8am–6pm',
       faqs: [{ q: 'Emergency service?', a: 'Yes, 24/7 for members.' }],
     })
-    expect(view.systemPrompt).toContain('BUSINESS OVERVIEW')
-    expect(view.systemPrompt).toContain('Family-owned HVAC in Austin.')
-    expect(view.systemPrompt).toContain('FREQUENTLY ASKED QUESTIONS')
+    expect(view.systemPrompt).toContain('Business facts (JSON):')
+    expect(view.systemPrompt).toContain('"overview":"Family-owned HVAC in Austin."')
+    expect(view.systemPrompt).toContain(
+      '"faqs":[{"q":"Emergency service?","a":"Yes, 24/7 for members."}]',
+    )
   })
 
   it('lists it, updates it, deletes it', async () => {

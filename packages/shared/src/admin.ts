@@ -47,6 +47,70 @@ export const chatbotAdminViewSchema = z.object({
 
 export type ChatbotAdminView = z.infer<typeof chatbotAdminViewSchema>
 
+export const importRequestSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .transform((value) =>
+      /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value) ? value : `https://${value}`,
+    )
+    .pipe(z.string().url('Enter a valid website URL')),
+  model: z.string().trim().min(1).max(120).optional(),
+})
+
+export type ImportRequest = z.infer<typeof importRequestSchema>
+
+export const importResultSchema = z.object({
+  facts: businessFactsSchema,
+  source: z.string(),
+})
+
+export type ImportResult = z.infer<typeof importResultSchema>
+
+export const chatbotTestSchema = z.object({
+  content: z.string().trim().min(1).max(2000),
+  facts: businessFactsSchema,
+})
+
+export type ChatbotTestInput = z.infer<typeof chatbotTestSchema>
+
+export const chatbotTestReplySchema = z.object({ reply: z.string() })
+
+export type ChatbotTestReply = z.infer<typeof chatbotTestReplySchema>
+
+export const leadViewSchema = z.object({
+  id: z.string(),
+  visitorName: z.string().nullable(),
+  visitorEmail: z.string().nullable(),
+  lastMessage: z.string(),
+  messageCount: z.number().int(),
+  createdAt: z.string(),
+})
+
+export type LeadView = z.infer<typeof leadViewSchema>
+
+export const chatbotStatsDaySchema = z.object({
+  date: z.string(),
+  conversations: z.number().int(),
+  leads: z.number().int(),
+  messages: z.number().int(),
+})
+
+export type ChatbotStatsDay = z.infer<typeof chatbotStatsDaySchema>
+
+export const chatbotStatsSchema = z.object({
+  windowDays: z.number().int(),
+  days: z.array(chatbotStatsDaySchema),
+  totals: z.object({
+    conversations: z.number().int(),
+    leads: z.number().int(),
+    conversionRate: z.number(),
+    avgMessagesPerConversation: z.number(),
+  }),
+})
+
+export type ChatbotStats = z.infer<typeof chatbotStatsSchema>
+
 export const clientUserViewSchema = z.object({
   id: z.string(),
   email: z.string(),

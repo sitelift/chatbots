@@ -3,18 +3,28 @@ import {
   type ChatbotAdminView,
   type ClientUserView,
   chatbotInputSchema,
+  chatbotTestSchema,
   clientUserViewSchema,
   composeSystemPrompt,
+  importRequestSchema,
 } from '@sitelift/shared'
-import { eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNotNull, or } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { db } from '../db'
-import { chatbots, clientAssignments, user as userTable } from '../db/schema'
+import {
+  chatbots,
+  clientAssignments,
+  conversations,
+  messages,
+  user as userTable,
+} from '../db/schema'
 import { newId } from '../lib/ids'
 import { logger } from '../lib/logger'
 import { CatalogError, fetchModelCatalog } from '../lib/modelCatalog'
 import { requireRole } from '../lib/session'
+import { extractBusinessFacts, fetchSiteText, ImportError } from '../services/importer'
+import { completeJson } from '../services/provider'
 import {
   getAdminSettingsView,
   resolveProviderCredentials,
@@ -207,6 +217,219 @@ adminRoutes.get('/models', async (c) => {
 })
 
 adminRoutes.get('/settings', (c) => c.json(getAdminSettingsView()))
+
+adminRoutes.post('/import', async (c) => {
+  const parsed = importRequestSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: { code: 'INVALID_INPUT', message: parsed.error.issues[0]?.message ?? 'Invalid URL' },
+      },
+      400,
+    )
+  }
+  try {
+    const { text, source } = await fetchSiteText(parsed.data.url)
+    const facts = await extractBusinessFacts(text, parsed.data.model)
+    return c.json({ facts, source })
+  } catch (err) {
+    if (err instanceof ImportError) {
+      const status = err.code === 'INVALID_URL' || err.code === 'BLOCKED_HOST' ? 400 : 502
+      return c.json({ error: { code: err.code, message: err.message } }, status)
+    }
+    logger.error({ err }, 'import failed')
+    return c.json(
+      { error: { code: 'EXTRACTION_FAILED', message: 'Could not read business facts' } },
+      502,
+    )
+  }
+})
+
+adminRoutes.post('/chatbots/:id/test', async (c) => {
+  const id = c.req.param('id')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, id) })
+  if (!row) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  }
+  const parsed = chatbotTestSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: 'INVALID_INPUT',
+          message: parsed.error.issues[0]?.message ?? 'Invalid test input',
+        },
+      },
+      400,
+    )
+  }
+  const { content, facts } = parsed.data
+  const systemPrompt = composeSystemPrompt(facts)
+  if (!systemPrompt) {
+    return c.json(
+      { error: { code: 'INVALID_INPUT', message: 'Add business facts before testing' } },
+      400,
+    )
+  }
+  try {
+    const credentials = resolveProviderCredentials()
+    if (!credentials.apiKey) {
+      return c.json(
+        {
+          error: {
+            code: 'AI_KEY_NOT_CONFIGURED',
+            message: 'Connect an AI provider in Settings before testing',
+          },
+        },
+        400,
+      )
+    }
+    const reply = await completeJson(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content },
+      ],
+      {
+        model: row.model,
+        baseUrl: row.baseUrl,
+        temperature: row.temperature,
+        maxTokens: row.maxTokens,
+      },
+      credentials,
+    )
+    return c.json({ reply })
+  } catch (err) {
+    logger.error({ err }, 'chatbot test failed')
+    return c.json(
+      { error: { code: 'AI_PROVIDER_ERROR', message: 'The AI provider could not answer' } },
+      502,
+    )
+  }
+})
+
+adminRoutes.get('/chatbots/:id/leads', async (c) => {
+  const id = c.req.param('id')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, id) })
+  if (!row) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  }
+  const convs = db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.chatbotId, id),
+        or(isNotNull(conversations.visitorName), isNotNull(conversations.visitorEmail)),
+      ),
+    )
+    .orderBy(desc(conversations.createdAt))
+    .limit(25)
+    .all()
+
+  const conversationIds = convs.map((c) => c.id)
+  const rows = conversationIds.length
+    ? db.select().from(messages).where(inArray(messages.conversationId, conversationIds)).all()
+    : []
+
+  const counts = new Map<string, number>()
+  const lastByConv = new Map<string, { content: string; at: number }>()
+  for (const m of rows) {
+    counts.set(m.conversationId, (counts.get(m.conversationId) ?? 0) + 1)
+    const at = m.createdAt.getTime()
+    const current = lastByConv.get(m.conversationId)
+    if (!current || at > current.at) {
+      lastByConv.set(m.conversationId, { content: m.content, at })
+    }
+  }
+
+  const leads = convs.map((c) => ({
+    id: c.id,
+    visitorName: c.visitorName,
+    visitorEmail: c.visitorEmail,
+    lastMessage: lastByConv.get(c.id)?.content ?? '',
+    messageCount: counts.get(c.id) ?? 0,
+    createdAt: c.createdAt.toISOString(),
+  }))
+
+  return c.json({ leads })
+})
+
+function dayKey(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+adminRoutes.get('/chatbots/:id/stats', async (c) => {
+  const id = c.req.param('id')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, id) })
+  if (!row) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  }
+
+  const requested = Number.parseInt(c.req.query('days') ?? '30', 10)
+  const windowDays = Number.isFinite(requested) && requested > 0 ? Math.min(requested, 90) : 30
+
+  const since = new Date()
+  since.setHours(0, 0, 0, 0)
+  since.setDate(since.getDate() - (windowDays - 1))
+
+  const convs = db
+    .select({
+      id: conversations.id,
+      createdAt: conversations.createdAt,
+      visitorName: conversations.visitorName,
+      visitorEmail: conversations.visitorEmail,
+    })
+    .from(conversations)
+    .where(and(eq(conversations.chatbotId, id), gte(conversations.createdAt, since)))
+    .all()
+
+  const convIds = convs.map((cv) => cv.id)
+  const msgRows = convIds.length
+    ? db
+        .select({ conversationId: messages.conversationId })
+        .from(messages)
+        .where(inArray(messages.conversationId, convIds))
+        .all()
+    : []
+
+  const buckets = new Map<string, { conversations: number; leads: number; messages: number }>()
+  for (let i = 0; i < windowDays; i += 1) {
+    const day = new Date(since)
+    day.setDate(day.getDate() + i)
+    buckets.set(dayKey(day), { conversations: 0, leads: 0, messages: 0 })
+  }
+
+  const messageCounts = new Map<string, number>()
+  for (const m of msgRows) {
+    messageCounts.set(m.conversationId, (messageCounts.get(m.conversationId) ?? 0) + 1)
+  }
+
+  for (const cv of convs) {
+    const bucket = buckets.get(dayKey(cv.createdAt))
+    if (!bucket) continue
+    bucket.conversations += 1
+    if (cv.visitorName || cv.visitorEmail) bucket.leads += 1
+    bucket.messages += messageCounts.get(cv.id) ?? 0
+  }
+
+  const totalConversations = convs.length
+  const totalLeads = convs.filter((cv) => cv.visitorName || cv.visitorEmail).length
+
+  return c.json({
+    windowDays,
+    days: [...buckets.entries()].map(([date, counts]) => ({ date, ...counts })),
+    totals: {
+      conversations: totalConversations,
+      leads: totalLeads,
+      conversionRate: totalConversations === 0 ? 0 : totalLeads / totalConversations,
+      avgMessagesPerConversation:
+        totalConversations === 0 ? 0 : msgRows.length / totalConversations,
+    },
+  })
+})
 
 adminRoutes.put('/settings', async (c) => {
   try {

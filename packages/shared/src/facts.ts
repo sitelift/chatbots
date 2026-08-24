@@ -8,11 +8,14 @@ export const faqPairSchema = z.object({
 export type FaqPair = z.infer<typeof faqPairSchema>
 
 export const businessFactsSchema = z.object({
-  overview: z.string().trim().max(2000).optional(),
+  overview: z.string().trim().max(4000).optional(),
   hours: z.string().trim().max(1000).optional(),
-  contact: z.string().trim().max(1000).optional(),
-  products: z.string().trim().max(2000).optional(),
-  misc: z.string().trim().max(2000).optional(),
+  location: z.string().trim().max(2000).optional(),
+  contact: z.string().trim().max(2000).optional(),
+  services: z.string().trim().max(4000).optional(),
+  pricing: z.string().trim().max(2000).optional(),
+  policies: z.string().trim().max(4000).optional(),
+  misc: z.string().trim().max(12000).optional(),
   faqs: z.array(faqPairSchema).max(50).optional(),
 })
 
@@ -26,9 +29,17 @@ export const GUARDRAILS = [
   '- For anything urgent or sensitive, point the visitor to the listed phone or contact details.',
 ].join('\n')
 
-function section(title: string, body?: string): string {
-  const trimmed = body?.trim()
-  return trimmed ? `${title}\n${trimmed}` : ''
+function factsToJson(facts: BusinessFacts): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(facts)) {
+    if (key === 'faqs') {
+      const faqs = (facts.faqs ?? []).filter((f) => f.q.trim() && f.a.trim())
+      if (faqs.length) out.faqs = faqs
+      continue
+    }
+    if (typeof value === 'string' && value.trim() !== '') out[key] = value.trim()
+  }
+  return out
 }
 
 /**
@@ -36,18 +47,7 @@ function section(title: string, body?: string): string {
  * the dashboard (live preview) — they must never drift.
  */
 export function composeSystemPrompt(facts: BusinessFacts): string {
-  const sections = [
-    section('BUSINESS OVERVIEW', facts.overview),
-    section('HOURS', facts.hours),
-    section('CONTACT', facts.contact),
-    section('PRODUCTS & SERVICES', facts.products),
-    facts.faqs?.length
-      ? `FREQUENTLY ASKED QUESTIONS\n${facts.faqs.map((f) => `Q: ${f.q}\nA: ${f.a}`).join('\n\n')}`
-      : '',
-    section('ADDITIONAL NOTES', facts.misc),
-  ].filter(Boolean)
-
-  if (sections.length === 0) return ''
-
-  return `${GUARDRAILS}\n\n---\n\n${sections.join('\n\n')}`
+  const factsJson = JSON.stringify(factsToJson(facts))
+  if (factsJson === '{}') return ''
+  return `${GUARDRAILS}\n\n---\n\nBusiness facts (JSON):\n${factsJson}`
 }

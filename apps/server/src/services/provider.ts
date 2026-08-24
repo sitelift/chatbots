@@ -37,6 +37,37 @@ function parseFrame(json: string): ParsedChunk {
   }
 }
 
+export async function completeJson(
+  messages: ProviderMessage[],
+  options: ProviderOptions,
+  credentials: { apiKey: string; baseUrl: string },
+): Promise<string> {
+  const res = await fetch(`${options.baseUrl ?? credentials.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${credentials.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: options.model,
+      messages,
+      temperature: options.temperature,
+      max_tokens: options.maxTokens,
+      response_format: { type: 'json_object' },
+    }),
+  })
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`AI provider error ${res.status}: ${detail.slice(0, 300)}`)
+  }
+
+  const body = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
+  }
+  return body.choices?.[0]?.message?.content ?? ''
+}
+
 export async function streamCompletion(
   messages: ProviderMessage[],
   options: ProviderOptions,

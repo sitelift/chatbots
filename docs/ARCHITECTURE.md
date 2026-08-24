@@ -63,7 +63,7 @@ Hono application. Route groups:
 | --- | --- | --- |
 | Public chat | `GET /api/chatbots/:id` (public metadata) · `POST /api/chat/:chatbotId/messages` · `POST /api/chat/:chatbotId/messages/stream` (SSE) | none; origin checked against chatbot's domain allowlist |
 | Auth | better-auth mounted routes (email+password, passkeys, sessions) · `GET /api/auth/me` (current user) · `GET /api/auth/bootstrap` (fresh-install detection → `{ hasUsers }`) | rate-limited |
-| Dashboard API | chatbots CRUD, clients, conversations, leads, analytics, settings, scrape import | better-auth session; role-scoped queries |
+| Dashboard API | chatbots CRUD, clients, conversations, leads, analytics, settings, **website import** (`POST /api/admin/import`), **draft-facts tester** (`POST /api/admin/chatbots/:id/test`), **leads** (`GET /api/admin/chatbots/:id/leads`), **per-bot activity stats** (`GET /api/admin/chatbots/:id/stats?days=30`, daily conversation/lead/message buckets + totals) | better-auth session; role-scoped queries |
 | Static | `/admin/*` (SPA), `/embed.js` (cacheable `public, max-age=600`) | none |
 
 Cross-cutting middleware: security headers, per-visitor + auth rate limits, request logging (pino), error envelope (consistent problem+json-style errors).
@@ -92,15 +92,18 @@ One React SPA at `/admin` (login included), built on **TanStack Router** (code-b
 | `/` | Overview | Live counts |
 | `/chatbots` | List (+ `?new=1` opens create) | URL-driven intent |
 | `/chatbots/$botId` | Full chatbot editor | Deep-linkable per client |
-| `/playground?bot=$id` | Widget playground | Bot selector reflected in URL |
 | `/settings` | Provider & key config | Agency role only |
 
 Auth is enforced by a `beforeLoad` guard on the layout route (redirects to `/login` when the session is absent); role scoping is re-verified server-side on every request. In production the router runs with basepath `/admin` and the Hono server SPA-falls back any `/admin/*` path to the built `index.html`. Tests render pages through the same tree using memory history (`renderAtLocation`). Role-aware views:
 
 - **Agency views:** setup wizard, chatbot list/create/edit (facts editor + FAQ pairs + prompt preview), client management, cross-bot conversation browser, lead inbox, analytics overview, settings (AI key, SMTP, branding, powered-by default).
-- **Client views:** their chatbot(s) only — facts/appearance editor with test playground, chat history, lead list + CSV export, stats.
+- **Client views:** their chatbot(s) only — facts/appearance editor with the in-editor Test tab, chat history, lead list + CSV export, stats.
 
 Data fetching via TanStack Query against the shared Zod contracts; UI via shadcn/ui + Tailwind v4. Design language follows PRODUCT.md principle 1 — clean, modern, premium; dark-mode aware; mobile-capable.
+
+**Chatbot editor** is a four-tab page: **Leads** (default — captured name/email + last message), **Knowledge** (doc-style facts editor — each section labeled by topic with the visitor question as a hint, numbered FAQ pairs up to 50, coverage checklist, a bottom Misc field, and the assembled prompt preview as a first-class side pane), **Test** (an interactive widget preview answering from the draft facts via the admin test endpoint), **Settings** (set-once identity/domains/color/status/model + embed snippet + delete). The Knowledge tab is where the business loads the facts the bot will represent it with; there is no raw-prompt mode — facts are the only input.
+
+**Website import** (`POST /api/admin/import`): SSRF-safe crawl — DNS + private-range blocking, redirect caps, same-origin links only (up to 5 pages, ~60k chars, junk-path denylist) → HTML-to-text extraction → the configured AI provider (the chatbot's selected model, else `AI_MODEL`) reads the combined page text and fills the `businessFactsSchema` JSON (all-LLM, one retry with error feedback, up to 20 FAQ pairs). The dashboard presents what was read and applies it as an editable draft — import never overwrites until the owner saves.
 
 ### 4.3 `packages/widget`
 
@@ -121,7 +124,7 @@ better-auth manages identity tables (users, sessions, accounts, passkeys). Appli
 
 | Table | Purpose |
 | --- | --- |
-| `chatbots` | name, website URL, welcome message, brand color/avatar, model, base URL, temperature/max tokens, status (active/paused/archived), allowed domains, facts JSON, FAQ pairs JSON |
+| `chatbots` | name, website URL, welcome message, brand color/avatar, model, base URL, temperature/max tokens, status (active/paused/archived), allowed domains, facts JSON (overview/hours/location/contact/services/pricing/policies/knowledge/FAQs), FAQ pairs JSON |
 | `client_assignments` | maps client users → chatbots (the ownership chain) |
 | `conversations` | per chatbot + visitorId; captured `visitor_name`/`visitor_email` (leads) |
 | `messages` | role, content, token usage per row |

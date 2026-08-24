@@ -56,32 +56,6 @@ export function createApp() {
 
   app.get('/admin', (c) => c.redirect('/admin/'))
 
-  app.get('/demo', (c) => {
-    const chatbotId = c.req.query('chatbot') ?? 'ch_demo'
-    const safeId = chatbotId.replace(/[^a-zA-Z0-9_-]/g, '')
-    return c.html(
-      `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SiteLift widget demo</title>
-<style>
-  body { font-family: ui-sans-serif, system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #fafafa; color: #18181b; }
-  main { text-align: center; max-width: 32rem; padding: 2rem; }
-</style>
-</head>
-<body>
-<main>
-  <h1>SiteLift widget demo</h1>
-  <p>This page loads the compiled embed script exactly like a client website would. The bubble should appear bottom-right.</p>
-</main>
-<script src="/embed.js" data-chatbot-id="${safeId}"></script>
-</body>
-</html>`,
-    )
-  })
-
   return app
 }
 
