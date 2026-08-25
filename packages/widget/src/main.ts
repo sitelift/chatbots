@@ -98,6 +98,13 @@ function styles(): string {
       display: flex; align-items: center; gap: 11px; padding: 15px 14px 15px 18px;
       background: #ffffff; border-bottom: 1px solid #f1f1f3; flex-shrink: 0;
     }
+    .header.bare {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 1;
+      padding: 8px 10px 0; background: transparent; border-bottom: none;
+      pointer-events: none;
+    }
+    .header.bare .minimize { pointer-events: auto; }
+    .header.bare + .messages { padding-top: 12px; }
     .avatar {
       width: 36px; height: 36px; border-radius: 9999px; overflow: hidden; flex-shrink: 0;
       background: color-mix(in srgb, var(--sl-brand) 13%, #ffffff);
@@ -110,7 +117,7 @@ function styles(): string {
     .subtitle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #8f8f96; margin-top: 1px; }
     .presence { width: 7px; height: 7px; border-radius: 9999px; background: #34c759; flex-shrink: 0; }
     .minimize {
-      width: 30px; height: 30px; border-radius: 9999px; border: none; background: transparent;
+      width: 30px; height: 30px; margin-left: auto; border-radius: 9999px; border: none; background: transparent;
       color: #a5a5ad; cursor: pointer; display: grid; place-items: center; flex-shrink: 0;
       transition: background 140ms ease-out, color 140ms ease-out;
     }
@@ -239,8 +246,9 @@ class SiteLiftWidget {
     panel.style[side] = '20px'
     panel.setAttribute('role', 'dialog')
     panel.setAttribute('aria-label', `Chat with ${this.meta.name}`)
+    const bare = !this.meta.showLogo && !this.meta.showName && !this.meta.showOnlineStatus
     panel.innerHTML = `
-      <div class="header">
+      <div class="header${bare ? ' bare' : ''}">
         ${this.meta.showLogo ? `<div class="avatar">${this.meta.avatarUrl ? `<img src="${this.meta.avatarUrl}" alt="">` : escapeHtml(this.meta.name.slice(0, 1).toUpperCase())}</div>` : ''}
         ${
           this.meta.showName || this.meta.showOnlineStatus

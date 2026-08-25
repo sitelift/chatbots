@@ -213,6 +213,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 ## Commit trail (this rebuild)
 
 ```
+<uncommitted> design: widget header — right-aligned close chevron in every config, bare overlay header (transparent, no border) when logo/name/status all off, welcome message aligned with the chevron; preview mirrors incl. header border
 <uncommitted> feat: widget settings — logo upload (client-side downscale to data URL), show-name toggle, responsive header collapsing
 <uncommitted> feat: widget settings — logo on/off + custom image, "Online now" toggle, powered-by moved into Widget Settings
 <uncommitted> docs: PROGRESS.md — settings editor polish + test count refresh

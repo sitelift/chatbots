@@ -1280,7 +1280,13 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
               className="absolute bottom-[104px] right-6 flex h-[420px] w-[340px] flex-col overflow-hidden rounded-[20px] bg-white shadow-2xl ring-1 ring-black/5"
               style={{ '--sl-brand': brand } as React.CSSProperties}
             >
-              <div className="flex items-center gap-3 px-4 py-3.5">
+              <div
+                className={`flex items-center gap-3 ${
+                  !form.showLogo && !form.showName && !form.showOnlineStatus
+                    ? 'pointer-events-none absolute inset-x-0 top-0 z-10 px-3 pt-2'
+                    : 'border-b border-[#f1f1f3] px-4 py-3.5'
+                }`}
+              >
                 {form.showLogo && (
                   <div
                     className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-semibold"
@@ -1309,13 +1315,18 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
                   type="button"
                   aria-label="Close chat"
                   onClick={() => setOpen(false)}
-                  className="grid size-7 place-items-center rounded-full text-[#a5a5ad] transition-colors duration-150 hover:bg-[#f4f4f5] hover:text-[#52525b]"
+                  className="pointer-events-auto ml-auto grid size-7 place-items-center rounded-full text-[#a5a5ad] transition-colors duration-150 hover:bg-[#f4f4f5] hover:text-[#52525b]"
                 >
                   <ChevronDown className="size-4" />
                 </button>
               </div>
 
-              <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-white px-4 py-4">
+              <div
+                ref={scrollRef}
+                className={`flex-1 space-y-3 overflow-y-auto bg-white px-4 ${
+                  !form.showLogo && !form.showName && !form.showOnlineStatus ? 'pb-4 pt-[11px]' : 'py-4'
+                }`}
+              >
                 {showWelcome && form.welcomeMessage && (
                   <div className="text-sm leading-relaxed text-[#3a3a40]">
                     {form.welcomeMessage}
