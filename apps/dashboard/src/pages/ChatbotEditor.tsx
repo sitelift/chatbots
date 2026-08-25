@@ -137,7 +137,7 @@ export function ChatbotEditor({ botId }: EditorProps) {
       showName: form.showName,
       showOnlineStatus: form.showOnlineStatus,
       poweredBy: form.poweredBy,
-      model: form.model.trim() || view.model,
+      model: form.model.trim() || null,
       allowedDomains: form.domains.map((d) => d.value.trim()).filter(Boolean),
       status: form.status,
       facts: cleanFacts(form.facts),
@@ -719,7 +719,8 @@ function SettingsTab({ view, form, set, armedDelete, deleting, onDelete }: Setti
       <section className="rounded-xl border bg-card p-5 shadow-sm">
         <h2 className="text-base font-medium">Model</h2>
         <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-          Served through the provider configured in Settings.
+          Served through the provider configured in Settings. Leave unset to use the global default
+          model from Settings.
         </p>
         <div className="mt-3">
           <ModelPicker model={form.model} onSelect={(id) => set('model', id)} />

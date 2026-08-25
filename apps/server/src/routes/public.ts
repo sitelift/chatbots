@@ -18,8 +18,8 @@ import {
   getHistory,
   insertMessage,
 } from '../services/conversations'
-import { streamCompletion } from '../services/provider'
-import { resolveProviderCredentials } from '../services/settings'
+import { type ProviderOptions, streamCompletion } from '../services/provider'
+import { resolveModel, resolveProviderCredentials } from '../services/settings'
 
 export class HttpError extends Error {
   constructor(
@@ -90,7 +90,33 @@ async function prepare(c: Context) {
     throw new HttpError(400, errorCodes.AI_KEY_NOT_CONFIGURED, 'No AI provider key is configured')
   }
 
-  return { bot, conversationId, userMessageId, history, userContent: input.content, credentials }
+  let model: string
+  try {
+    model = resolveModel(bot.model)
+  } catch {
+    throw new HttpError(
+      500,
+      errorCodes.MODEL_NOT_CONFIGURED,
+      'No AI model is configured. Set a default model in Settings or pick one for this chatbot.',
+    )
+  }
+
+  const providerOptions: ProviderOptions = {
+    model,
+    baseUrl: bot.baseUrl,
+    temperature: bot.temperature,
+    maxTokens: bot.maxTokens,
+  }
+
+  return {
+    bot,
+    conversationId,
+    userMessageId,
+    history,
+    userContent: input.content,
+    credentials,
+    providerOptions,
+  }
 }
 
 function buildProviderMessages(
@@ -142,10 +168,11 @@ publicRoutes.get('/chatbots/:id', async (c) => {
 
 publicRoutes.post('/chat/:chatbotId/messages', async (c) => {
   try {
-    const { bot, conversationId, history, userContent, credentials } = await prepare(c)
+    const { bot, conversationId, history, userContent, credentials, providerOptions } =
+      await prepare(c)
     const result = await streamCompletion(
       buildProviderMessages(bot.systemPrompt, history, userContent),
-      bot,
+      providerOptions,
       credentials,
       () => {},
     )
@@ -168,7 +195,8 @@ publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
     return handleError(c, err)
   }
 
-  const { bot, conversationId, userMessageId, history, userContent, credentials } = prepared
+  const { bot, conversationId, userMessageId, history, userContent, credentials, providerOptions } =
+    prepared
 
   c.header('X-Accel-Buffering', 'no')
   for (const [k, v] of Object.entries(sseHeaders())) c.header(k, v)
@@ -185,7 +213,7 @@ publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
     try {
       result = await streamCompletion(
         buildProviderMessages(bot.systemPrompt, history, userContent),
-        bot,
+        providerOptions,
         credentials,
         (text) => {
           void s.write(sseFrame({ event: 'token', text }))

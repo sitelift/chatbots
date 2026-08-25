@@ -3,11 +3,11 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { sql } from 'drizzle-orm'
 import { db } from '../db'
 import { account, session, user, verification } from '../db/schema'
+import { resolveAppSecret } from './secrets'
 
 export const auth = betterAuth({
   appName: 'sitelift',
-  secret:
-    process.env.BETTER_AUTH_SECRET ?? process.env.ENCRYPTION_KEY ?? 'dev-secret-do-not-use-in-prod',
+  secret: process.env.BETTER_AUTH_SECRET ?? resolveAppSecret(),
   baseURL: process.env.BETTER_AUTH_URL ?? `http://localhost:${process.env.PORT ?? 3000}`,
   trustedOrigins: (request) => {
     const origin = request?.headers?.get('origin')

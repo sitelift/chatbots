@@ -4,12 +4,19 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db } from '../src/db'
 import { messages } from '../src/db/schema'
 import { createApp } from '../src/index'
-import { DEMO_CHATBOT_ID, seedDemoChatbot, setStreamContent, startMockProvider } from './helpers'
+import {
+  DEMO_CHATBOT_ID,
+  seedDemoChatbot,
+  setDefaultModel,
+  setStreamContent,
+  startMockProvider,
+} from './helpers'
 
 let mockProvider: Server
 
 beforeAll(async () => {
   seedDemoChatbot()
+  setDefaultModel('test-mini')
   mockProvider = await startMockProvider()
 })
 

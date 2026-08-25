@@ -1,6 +1,7 @@
 import { PROVIDER_PRESETS, presetForBaseUrl } from '@sitelift/shared'
 import { Check, KeyRound, LoaderCircle, ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { ModelPicker } from '../components/chatbot/ModelPicker'
 import { type AdminApiError, apiFetch } from '../lib/api'
 import { inputClass, labelClass } from '../lib/ui'
 
@@ -9,13 +10,17 @@ interface SettingsView {
   keyHint: string
   keySource: 'settings' | 'env' | 'none'
   baseUrl: string
+  defaultModel: string
   encryptionAvailable: boolean
+  encryptionSource: 'env' | 'file' | 'generated'
+  encryptionFilePath: string | null
 }
 
 export function SettingsPage() {
   const [view, setView] = useState<SettingsView | null>(null)
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [baseUrlInput, setBaseUrlInput] = useState('')
+  const [defaultModelInput, setDefaultModelInput] = useState('')
   const [replacing, setReplacing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -26,6 +31,7 @@ export function SettingsPage() {
       const data = await apiFetch<SettingsView>('/api/admin/settings')
       setView(data)
       setBaseUrlInput(data.baseUrl)
+      setDefaultModelInput(data.defaultModel)
     } catch (err) {
       const api = (err as Error & { api?: AdminApiError }).api
       setError(api?.message ?? 'Failed to load settings')
@@ -41,7 +47,10 @@ export function SettingsPage() {
     setError('')
     setSaved(false)
     try {
-      const body: { apiKey?: string; baseUrl?: string } = { baseUrl: baseUrlInput }
+      const body: { apiKey?: string; baseUrl?: string; defaultModel?: string } = {
+        baseUrl: baseUrlInput,
+        defaultModel: defaultModelInput,
+      }
       if (replacing || view?.keySource === 'none') body.apiKey = apiKeyInput
       const data = await apiFetch<SettingsView>('/api/admin/settings', {
         method: 'PUT',
@@ -61,6 +70,9 @@ export function SettingsPage() {
   }
 
   const connected = view?.hasKey ?? false
+  const dirty =
+    (baseUrlInput ?? '') !== (view?.baseUrl ?? '') ||
+    (defaultModelInput ?? '') !== (view?.defaultModel ?? '')
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
@@ -69,7 +81,7 @@ export function SettingsPage() {
         One AI provider powers every chatbot on this installation.
       </p>
 
-      <div className="mt-8 overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="mt-8 rounded-xl border bg-card shadow-sm">
         <div className="flex items-center gap-2.5 border-b px-5 py-4">
           <KeyRound className="size-4 text-muted-foreground" />
           <h2 className="text-base font-medium">AI provider</h2>
@@ -166,6 +178,22 @@ export function SettingsPage() {
             )}
           </div>
 
+          <div className="border-t pt-5">
+            <div className={labelClass}>Default model</div>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+              Used by every chatbot that doesn't have its own model selected. Bots without any model
+              cannot answer visitors until one is configured here or on the bot.
+            </p>
+            <div className="mt-2.5">
+              <ModelPicker
+                model={defaultModelInput}
+                onSelect={(id) => setDefaultModelInput(id)}
+                emptyLabel="No default model set"
+                clearLabel="No default (bots must pick a model)"
+              />
+            </div>
+          </div>
+
           {error && (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
@@ -174,6 +202,12 @@ export function SettingsPage() {
           {view && !view.encryptionAvailable && (
             <p className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
               ENCRYPTION_KEY is not set on the server — keys cannot be stored until it is.
+            </p>
+          )}
+          {view?.encryptionAvailable && view.encryptionSource === 'generated' && (
+            <p className="rounded-md bg-muted px-3 py-2 text-[13px] text-muted-foreground">
+              Keys are encrypted with a key generated on first launch and stored in the data volume
+              ({view.encryptionFilePath}). No environment setup needed.
             </p>
           )}
 
@@ -186,7 +220,9 @@ export function SettingsPage() {
             <button
               type="button"
               onClick={() => void save()}
-              disabled={saving || (!replacing && !apiKeyInput && view?.keySource !== 'none')}
+              disabled={
+                saving || (!replacing && !apiKeyInput && view?.keySource !== 'none' && !dirty)
+              }
               className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
             >
               {saving && <LoaderCircle className="size-3.5 animate-spin" />}

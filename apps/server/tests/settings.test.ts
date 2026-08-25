@@ -5,10 +5,12 @@ import { settings } from '../src/db/schema'
 import { createApp } from '../src/index'
 import { resolveProviderCredentials } from '../src/services/settings'
 import {
+  clearDefaultModel,
   DEMO_CHATBOT_ID,
   getLastModelsAuthHeader,
   resetUsers,
   seedDemoChatbot,
+  setDefaultModel,
   signUpUser,
   startMockProvider,
   type TestUser,
@@ -21,6 +23,7 @@ const headers = () => ({ 'Content-Type': 'application/json', Cookie: agency.cook
 beforeAll(async () => {
   seedDemoChatbot()
   resetUsers()
+  setDefaultModel('test-mini')
   agency = await signUpUser('Owner')
 })
 
@@ -133,6 +136,41 @@ describe('admin settings API', () => {
       expect((await res.json()).reply).toBe('Hello world')
     } finally {
       mock?.close()
+    }
+  })
+
+  it('stores and clears the global default model', async () => {
+    const put = await createApp().request('/api/admin/settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ defaultModel: 'my-custom-model' }),
+    })
+    expect(put.status).toBe(200)
+    expect((await put.json()).defaultModel).toBe('my-custom-model')
+
+    const cleared = await createApp().request('/api/admin/settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ defaultModel: '' }),
+    })
+    expect(cleared.status).toBe(200)
+    expect((await cleared.json()).defaultModel).toBe('')
+  })
+
+  it('rejects chat with a clear error when no model is configured anywhere', async () => {
+    clearDefaultModel()
+    try {
+      const res = await createApp().request(`/api/chat/${DEMO_CHATBOT_ID}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitorId: 'visitor_no_model', content: 'hello' }),
+      })
+      expect(res.status).toBe(500)
+      const body = await res.json()
+      expect(body.error.code).toBe('MODEL_NOT_CONFIGURED')
+      expect(body.error.message).toContain('Set a default model in Settings')
+    } finally {
+      setDefaultModel('test-mini')
     }
   })
 })

@@ -73,7 +73,7 @@ Cross-cutting middleware: security headers, per-visitor + auth rate limits, requ
 1. Load chatbot by id → 404 if missing/paused; verify request origin against allowlist.
 2. Validate content (non-empty, ≤2000 chars); rate-limit check per visitorId → 429.
 3. Resolve conversation (create if absent; verify ownership) → insert user message row.
-4. Load last 20 messages; resolve global key (settings decrypted → env fallback) and base URL (chatbot override → settings → env → default).
+4. Load last 20 messages; resolve global key (settings decrypted → env fallback), model (per-bot override → Settings default; **no built-in default** — fail with `MODEL_NOT_CONFIGURED` when unset), and base URL (chatbot override → settings → env → default).
 5. Flush SSE headers immediately → `event: meta` with ids (TTFB target <10ms).
 6. Call provider with `stream: true`; forward deltas as `event: token`; persist usage tokens.
 7. On completion persist assistant row → `event: done`. Provider errors → `event: error`.
@@ -96,14 +96,14 @@ One React SPA at `/admin` (login included), built on **TanStack Router** (code-b
 
 Auth is enforced by a `beforeLoad` guard on the layout route (redirects to `/login` when the session is absent); role scoping is re-verified server-side on every request. In production the router runs with basepath `/admin` and the Hono server SPA-falls back any `/admin/*` path to the built `index.html`. Tests render pages through the same tree using memory history (`renderAtLocation`). Role-aware views:
 
-- **Agency views:** setup wizard, chatbot list/create/edit (facts editor + FAQ pairs + prompt preview), client management, cross-bot conversation browser, lead inbox, analytics overview, settings (AI key, SMTP, branding, powered-by default).
+- **Agency views:** setup wizard, chatbot list/create/edit (facts editor + FAQ pairs + prompt preview), client management, cross-bot conversation browser, lead inbox, analytics overview, settings (AI key, default model, SMTP, branding, powered-by default).
 - **Client views:** their chatbot(s) only — facts/appearance editor with the in-editor Test tab, chat history, lead list + CSV export, stats.
 
 Data fetching via TanStack Query against the shared Zod contracts; UI via shadcn/ui + Tailwind v4. Design language follows PRODUCT.md principle 1 — clean, modern, premium; dark-mode aware; mobile-capable.
 
 **Chatbot editor** is a four-tab page: **Leads** (default — captured name/email + last message), **Knowledge** (doc-style facts editor — each section labeled by topic with the visitor question as a hint, numbered FAQ pairs up to 50, coverage checklist, a bottom Misc field, and the assembled prompt preview as a first-class side pane), **Test** (an interactive widget preview answering from the draft facts via the admin test endpoint), **Settings** (set-once identity/domains/color/status/model + embed snippet + delete). The Knowledge tab is where the business loads the facts the bot will represent it with; there is no raw-prompt mode — facts are the only input.
 
-**Website import** (`POST /api/admin/import`): SSRF-safe crawl — DNS + private-range blocking, redirect caps, same-origin links only (up to 5 pages, ~60k chars, junk-path denylist) → HTML-to-text extraction → the configured AI provider (the chatbot's selected model, else `AI_MODEL`) reads the combined page text and fills the `businessFactsSchema` JSON (all-LLM, one retry with error feedback, up to 20 FAQ pairs). The dashboard presents what was read and applies it as an editable draft — import never overwrites until the owner saves.
+**Website import** (`POST /api/admin/import`): SSRF-safe crawl — DNS + private-range blocking, redirect caps, same-origin links only (up to 5 pages, ~60k chars, junk-path denylist) → HTML-to-text extraction → the configured AI provider (the chatbot's model or the Settings default) reads the combined page text and fills the `businessFactsSchema` JSON (all-LLM, one retry with error feedback, up to 20 FAQ pairs). The dashboard presents what was read and applies it as an editable draft — import never overwrites until the owner saves.
 
 ### 4.3 `packages/widget`
 
@@ -173,7 +173,7 @@ Owner (role `client`) PUTs new facts via dashboard API → server verifies owner
 - better-auth sessions (httpOnly cookies, CSRF protection, passkeys supported); login rate limits.
 - Role scoping enforced in query layer, not UI — a client token simply cannot select another tenant's rows.
 - Domain allowlist per chatbot: public chat endpoints verify Origin/Referer against allowed domains; blocks token theft via embed reuse.
-- Global AI key AES-256-GCM encrypted at rest (`ENCRYPTION_KEY`); only a 4-char hint ever reaches browsers.
+- Global AI key AES-256-GCM encrypted at rest. Key material resolved at boot: `ENCRYPTION_KEY` env if set, else `data/encryption.key` in the volume, else auto-generated and persisted (chmod 600). Only a 4-char hint ever reaches browsers.
 - Per-visitor rate limits (~20 msgs/min), 2000-char cap, 20-message context cap bound abuse.
 - SSRF-filtered scraper (private-range blocking) for the admin-only import.
 - Audit log for sensitive actions; pino logs structured but secret-free.
@@ -182,7 +182,7 @@ A dedicated SECURITY.md (threat model, hardening checklist) will be written once
 
 ## 9. Deployment
 
-Multi-stage Dockerfile: build stage compiles server + dashboard + widget; runtime stage carries only production deps and built assets. Single container, named volume for the SQLite file, `ENCRYPTION_KEY` required on first boot, migrations run automatically at startup, healthcheck hits `/health`. Reverse proxy (Caddy/nginx) terminates TLS upstream. Backups = copy the volume file.
+Multi-stage Dockerfile: build stage compiles server + dashboard + widget; runtime stage carries only production deps and built assets. Single container, named volume for the SQLite file, `ENCRYPTION_KEY` optional (auto-generated on first boot and persisted in the volume when unset), migrations run automatically at startup, healthcheck hits `/health`. Reverse proxy (Caddy/nginx) terminates TLS upstream. Backups = copy the volume file.
 
 ## 10. Open questions
 

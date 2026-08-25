@@ -5,6 +5,7 @@ export const errorCodes = {
   FORBIDDEN_ORIGIN: 'FORBIDDEN_ORIGIN',
   AI_KEY_NOT_CONFIGURED: 'AI_KEY_NOT_CONFIGURED',
   AI_PROVIDER_ERROR: 'AI_PROVIDER_ERROR',
+  MODEL_NOT_CONFIGURED: 'MODEL_NOT_CONFIGURED',
 } as const
 
 export type ErrorCode = (typeof errorCodes)[keyof typeof errorCodes]

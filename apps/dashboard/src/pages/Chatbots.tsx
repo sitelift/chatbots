@@ -155,7 +155,7 @@ export function ChatbotsPage() {
                   </div>
                   <StatusBadge status={bot.status} />
                   <span className="hidden font-mono text-xs text-muted-foreground md:inline">
-                    {bot.model}
+                    {bot.model ?? 'Default'}
                   </span>
                   <span className="tnum hidden text-xs text-muted-foreground lg:inline">
                     {new Date(bot.createdAt).toLocaleDateString(undefined, {

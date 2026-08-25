@@ -11,6 +11,7 @@ import {
   getLastCompletionMessages,
   resetUsers,
   seedDemoChatbot,
+  setDefaultModel,
   setJsonCompletionContent,
   signUpUser,
   startMockProvider,
@@ -46,6 +47,7 @@ const FACTS_JSON = JSON.stringify({
 beforeAll(async () => {
   seedDemoChatbot()
   resetUsers()
+  setDefaultModel('test-mini')
   agency = await signUpUser('Owner')
   provider = await startMockProvider()
   site = await startMockSite(SITE_HTML)

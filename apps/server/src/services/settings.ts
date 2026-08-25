@@ -3,9 +3,11 @@ import { db } from '../db'
 import { settings } from '../db/schema'
 import { env } from '../env'
 import { decryptSecret, type EncryptedSecret, encryptSecret, keyHint } from '../lib/crypto'
+import { resolveAppSecret, secretFilePath, secretSource } from '../lib/secrets'
 
 const AI_KEY_ROW = 'ai_api_key_enc'
 const AI_BASE_URL_ROW = 'ai_base_url'
+const AI_DEFAULT_MODEL_ROW = 'ai_default_model'
 
 interface StoredKey {
   secret: EncryptedSecret
@@ -42,6 +44,7 @@ function setSetting(key: string, value: string): void {
 export function getAdminSettingsView() {
   const stored = getSetting(AI_KEY_ROW)
   const baseUrl = getSetting(AI_BASE_URL_ROW) ?? ''
+  const defaultModel = getSetting(AI_DEFAULT_MODEL_ROW) ?? ''
   let hint = ''
   if (stored) {
     try {
@@ -53,18 +56,38 @@ export function getAdminSettingsView() {
     keyHint: hint,
     keySource: stored ? 'settings' : env.openaiApiKey ? 'env' : 'none',
     baseUrl,
-    encryptionAvailable: Boolean(process.env.ENCRYPTION_KEY),
+    defaultModel,
+    encryptionAvailable: true,
+    encryptionSource: secretSource(),
+    encryptionFilePath: secretSource() === 'generated' ? secretFilePath() : null,
   }
 }
 
-export function saveApiKey(plaintext: string, baseUrl?: string): void {
-  const passphrase = process.env.ENCRYPTION_KEY
-  if (!passphrase) {
-    throw new SettingsError(
-      'ENCRYPTION_UNAVAILABLE',
-      'Set ENCRYPTION_KEY in the environment before storing API keys.',
-    )
+export function saveDefaultModel(model: string): void {
+  const trimmed = model.trim()
+  if (trimmed === '') {
+    db.delete(settings).where(eq(settings.key, AI_DEFAULT_MODEL_ROW)).run()
+    return
   }
+  setSetting(AI_DEFAULT_MODEL_ROW, trimmed)
+}
+
+export function getDefaultModel(): string {
+  return getSetting(AI_DEFAULT_MODEL_ROW) ?? ''
+}
+
+export function resolveModel(model: string | null): string {
+  if (model && model.trim() !== '') return model
+  const global = getDefaultModel()
+  if (global) return global
+  throw new SettingsError(
+    'MODEL_NOT_CONFIGURED',
+    'No AI model is configured. Set a default model in Settings or pick one for this chatbot.',
+  )
+}
+
+export function saveApiKey(plaintext: string, baseUrl?: string): void {
+  const passphrase = resolveAppSecret()
   const stored: StoredKey = {
     secret: encryptSecret(plaintext, passphrase),
     hint: keyHint(plaintext),
@@ -83,13 +106,11 @@ export function resolveProviderCredentials(): ProviderCredentials {
 
   const stored = getSetting(AI_KEY_ROW)
   if (stored) {
-    const passphrase = process.env.ENCRYPTION_KEY
-    if (passphrase) {
-      try {
-        const apiKey = decryptSecret((JSON.parse(stored) as StoredKey).secret, passphrase)
-        return { apiKey, baseUrl, source: 'settings' }
-      } catch {}
-    }
+    const passphrase = resolveAppSecret()
+    try {
+      const apiKey = decryptSecret((JSON.parse(stored) as StoredKey).secret, passphrase)
+      return { apiKey, baseUrl, source: 'settings' }
+    } catch {}
   }
 
   if (env.openaiApiKey) return { apiKey: env.openaiApiKey, baseUrl, source: 'env' }

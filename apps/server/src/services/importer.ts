@@ -1,6 +1,5 @@
 import { lookup } from 'node:dns/promises'
 import { type BusinessFacts, businessFactsSchema } from '@sitelift/shared'
-import { env } from '../env'
 import { completeJson } from './provider'
 import { resolveProviderCredentials } from './settings'
 
@@ -341,6 +340,6 @@ function normalizeFacts(facts: BusinessFacts): BusinessFacts {
   return out
 }
 
-export function extractBusinessFacts(text: string, model?: string): Promise<BusinessFacts> {
-  return extractFactsWithRetry(text, model || env.defaultModel)
+export function extractBusinessFacts(text: string, model: string): Promise<BusinessFacts> {
+  return extractFactsWithRetry(text, model)
 }

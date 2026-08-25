@@ -19,7 +19,6 @@ export const env = {
   databasePath: process.env.DATABASE_PATH ?? 'data/sitelift.db',
   openaiApiKey: process.env.OPENAI_API_KEY ?? '',
   openaiBaseUrl: process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
-  defaultModel: process.env.AI_MODEL ?? 'gpt-4o-mini',
   widgetDistPath:
     process.env.WIDGET_DIST_PATH ??
     fileURLToPath(new URL('../../../packages/widget/dist/embed.js', import.meta.url)),

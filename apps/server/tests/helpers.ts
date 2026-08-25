@@ -2,10 +2,21 @@ import type { Server } from 'node:http'
 import { createServer } from 'node:http'
 import { eq } from 'drizzle-orm'
 import { db } from '../src/db'
-import { chatbots, user } from '../src/db/schema'
+import { chatbots, settings, user } from '../src/db/schema'
 import { createApp } from '../src/index'
 
 export const DEMO_CHATBOT_ID = 'ch_demo'
+
+export function setDefaultModel(model: string): void {
+  db.insert(settings)
+    .values({ key: 'ai_default_model', value: model })
+    .onConflictDoUpdate({ target: settings.key, set: { value: model, updatedAt: new Date() } })
+    .run()
+}
+
+export function clearDefaultModel(): void {
+  db.delete(settings).where(eq(settings.key, 'ai_default_model')).run()
+}
 
 export function seedDemoChatbot(): void {
   db.insert(chatbots)

@@ -3,7 +3,7 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** widget settings round 2 — upload a logo image directly (client-side downscale → data URL, no new endpoints), toggle the business name on/off, and the header now adapts to whatever is on/off (logo, name, online status).
+> **Last updated:** no default model — per-bot override or global default in Settings, else a clear `MODEL_NOT_CONFIGURED` error (was hardcoded `gpt-4o-mini`).
 
 ---
 
@@ -13,7 +13,7 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 69 passing (45 server · 24 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 78 passing (50 server · 28 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
@@ -103,6 +103,35 @@
 </details>
 
 <details>
+<summary><strong>Guided create wizard — creation rewritten to mirror settings (DONE)</strong></summary>
+
+- **Old create form removed.** It was a flat dump with a raw "Business facts · the system prompt"
+  textarea (a leftover of removed raw-prompt mode) and comma-separated domains — it contradicted the
+  tabbed editor. It lived inline on the list page via `?new=1`.
+- **New `/chatbots/new` wizard** (static route; deep-linkable, "URL param is the state" kept):
+  1. **Basics** — name (required), website URL
+  2. **Knowledge** — import-from-website front and center (when no facts), then structured facts,
+     FAQ pairs, misc, coverage checklist + final-prompt panes
+  3. **Look & greet** — welcome, quick replies, brand color, logo + widget toggles with a **live
+     widget preview** (same `WidgetSim` as the editor's Test tab, static mode)
+  4. **Launch** — allowed-domains line list, model picker, status → **Create**, then lands in the
+     editor (defaults to Leads like clicking the row during normal use)
+- **Shared chatbot components extracted** so create and settings can never drift
+  (`apps/dashboard/src/components/chatbot/`): `state.ts` (FormState + helpers), `GreetingFields`,
+  `KnowledgeEditor` (facts/FAQ/misc/import/coverage/prompt), `WidgetFields` (logo + toggles),
+  `DomainsList`, `ModelPicker` (now self-contained — owns its own fetch/state), `WidgetSim`
+  (presentational widget preview shared by Test tab + wizard).
+- `ChatbotEditor` tabs now consume the same components; Settings keeps basics/embed/danger inline.
+- **Knowledge step polish:** `keepImportVisible` prop — the wizard keeps the import card put even
+  after facts exist (no more jarring vanish when you click "Show example"); "Show example" is now
+  reversible via a "Clear example" link on the field (shown while the field still holds the sample
+  text), so sample facts never feel permanent.
+- Tests: wizard suite (`tests/NewChatbot.test.tsx` — name-gate, import-first, import stays put +
+  example-clear, create → editor leads, status in payload); `Chatbots.test.tsx` updated for the new
+  route. 28 dashboard tests green.
+</details>
+
+<details>
 <summary><strong>Leads graphs + editor taste pass (DONE)</strong></summary>
 
 - **Activity stats on the Leads tab** (above the inbox): new `GET /api/admin/chatbots/:id/stats?days=30`
@@ -135,6 +164,43 @@
 - **Robustness**: `lib/uid.ts` falls back when `crypto.randomUUID` is missing (plain-HTTP LAN
   deployments have no secure context); model-picker empty state no longer references a removed
   custom-id field.
+</details>
+
+<details>
+<summary><strong>Zero-config encryption — auto-generated app secret (DONE)</strong></summary>
+
+- **`ENCRYPTION_KEY` is now optional.** New `lib/secrets.ts` resolves the app secret at boot:
+  `ENCRYPTION_KEY` env → `data/encryption.key` in the volume → auto-generates a random 32-byte key
+  and persists it (chmod 600). No env setup needed; power users can still pin their own key.
+- better-auth's session secret now uses the same resolved secret (kept `BETTER_AUTH_SECRET`
+  override; dropped the hardcoded `dev-secret-do-not-use-in-prod` fallback) — sessions stay valid
+  across restarts.
+- Settings API/UI: `encryptionAvailable` is always true; Settings page shows where the key lives
+  instead of the old "set ENCRYPTION_KEY" warning. Old stored keys silently fall back to env if a
+  previously-set env key stops matching (graceful, no crash).
+- `docker-compose.yml` passes `ENCRYPTION_KEY` through (optional override).
+- Gotcha: key sits next to the DB in the volume — protects backup copies, not someone who steals
+  the whole volume (accepted tradeoff for this tier). Tests: `tests/secrets.test.ts` covers
+  env/file/generated resolution + 600 perms.
+</details>
+
+<details>
+<summary><strong>No default model — explicit per-bot or global (DONE)</strong></summary>
+
+- **Removed the hardcoded `gpt-4o-mini` default everywhere** (schema default, create-route
+  fallback, `env.defaultModel`/`AI_MODEL`). `chatbots.model` is now nullable; the migration
+  (`0008`) nulls existing rows that only ever had the old implicit default.
+- **Model resolution** (`services/settings.ts → resolveModel`): per-bot override → Settings
+  **Default model** (new `ai_default_model` setting, editable in the Settings page via the model
+  picker) → else a clear `MODEL_NOT_CONFIGURED` error. Applies to chat (streaming + non-stream),
+  the editor Test tab, and website import.
+- Chat/import/test refuse to guess — no model configured anywhere returns an explicit
+  `MODEL_NOT_CONFIGURED` code/message instead of silently calling the provider.
+- Dashboard: Settings gains a **Default model** field; the bot ModelPicker shows
+  "Use global default" when unset and offers a "Use global default instead" reset; chatbot list
+  shows `Default` for bots without an override; create/editor copy updated.
+- Tests: settings.test.ts covers save/clear of the default and the `MODEL_NOT_CONFIGURED` path;
+  chat/importer tests set a global default via `setDefaultModel()`.
 </details>
 
 ## Known gaps / tech debt (honest)
@@ -170,14 +236,19 @@
 ```bash
 corepack enable && pnpm install        # node >= 22
 pnpm approve-builds                    # allow better-sqlite3 + esbuild native scripts (first time)
-pnpm dev            # API server :3000  (serves /demo?chatbot=ch_demo, /admin/, /embed.js)
-pnpm dev:dashboard  # Vite :5173     (proxies /api, /demo, /embed.js)
+pnpm dev            # API server :3000  (serves /admin/, /embed.js)
+pnpm dev:dashboard  # Vite :5173     (proxies /api, /embed.js)
 pnpm test && pnpm lint && pnpm typecheck && pnpm build
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-`.env` keys: `ENCRYPTION_KEY` (required to save API keys), `OPENAI_API_KEY` + `OPENAI_BASE_URL`
-(or set inside Settings UI), `AI_MODEL`. Demo bot `ch_demo` is seeded on boot.
+`.env` keys: `OPENAI_API_KEY` + `OPENAI_BASE_URL` (or set inside Settings UI).
+There is **no default model** — the owner sets it either globally in Settings (Default model) or
+per chatbot; chatbots with no model refuse to answer with a clear "MODEL_NOT_CONFIGURED" error.
+`ENCRYPTION_KEY` is optional — if unset, the server auto-generates one on first launch and persists
+it as `data/encryption.key` inside the volume (chmod 600), so no env setup is needed. Setting it
+explicitly overrides the generated key (and lets you manage/rotate it yourself). No demo bot is
+seeded — fresh installs start with a blank chatbot list.
 
 ## Gotchas learned (do not rediscover the hard way)
 
@@ -213,6 +284,11 @@ docker compose -f docker/docker-compose.yml up -d --build
 ## Commit trail (this rebuild)
 
 ```
+<uncommitted> chore: no demo chatbot seed on boot — fresh installs start blank
+<uncommitted> feat: no default model — per-bot override or Settings default, else explicit MODEL_NOT_CONFIGURED (chat/test/import); migration nulls old implicit gpt-4o-mini; Settings default-model field; ModelPicker global-default option
+<uncommitted> feat: zero-config encryption — auto-generated app secret on first launch (env override kept), better-auth uses it, Settings UI shows key location, compose passthrough
+<uncommitted> fix: create wizard Knowledge step — keep import card visible once facts exist (keepImportVisible), make "Show example" reversible via a per-field "Clear example" link
+<uncommitted> feat: guided create wizard (/chatbots/new) mirroring the editor — shared chatbot field components extracted (KnowledgeEditor, WidgetFields, DomainsList, ModelPicker, WidgetSim, state), old inline CreateForm removed, post-create lands in editor Leads tab
 <uncommitted> design: widget header — right-aligned close chevron in every config, bare overlay header (transparent, no border) when logo/name/status all off, welcome message aligned with the chevron; preview mirrors incl. header border
 <uncommitted> feat: widget settings — logo upload (client-side downscale to data URL), show-name toggle, responsive header collapsing
 <uncommitted> feat: widget settings — logo on/off + custom image, "Online now" toggle, powered-by moved into Widget Settings

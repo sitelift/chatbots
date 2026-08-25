@@ -28,10 +28,13 @@ import { extractBusinessFacts, fetchSiteText, ImportError } from '../services/im
 import { completePlain } from '../services/provider'
 import {
   getAdminSettingsView,
+  getDefaultModel,
+  resolveModel,
   resolveProviderCredentials,
   SettingsError,
   saveApiKey,
   saveBaseUrl,
+  saveDefaultModel,
 } from '../services/settings'
 
 export const adminRoutes = new Hono()
@@ -129,7 +132,7 @@ adminRoutes.post('/chatbots', async (c) => {
     poweredBy: input.poweredBy ?? true,
     systemPrompt: resolvePrompt(input),
     factsJson: serializeFacts(input) ?? null,
-    model: input.model ?? process.env.AI_MODEL ?? 'gpt-4o-mini',
+    model: input.model ?? null,
     baseUrl: input.baseUrl || null,
     temperature: input.temperature ?? 0.4,
     maxTokens: input.maxTokens ?? 512,
@@ -236,8 +239,20 @@ adminRoutes.post('/import', async (c) => {
     )
   }
   try {
+    const model = parsed.data.model ?? getDefaultModel()
+    if (!model) {
+      return c.json(
+        {
+          error: {
+            code: 'MODEL_NOT_CONFIGURED',
+            message: 'Set a default model in Settings before importing.',
+          },
+        },
+        400,
+      )
+    }
     const { text, source } = await fetchSiteText(parsed.data.url)
-    const facts = await extractBusinessFacts(text, parsed.data.model)
+    const facts = await extractBusinessFacts(text, model)
     return c.json({ facts, source })
   } catch (err) {
     if (err instanceof ImportError) {
@@ -291,13 +306,19 @@ adminRoutes.post('/chatbots/:id/test', async (c) => {
         400,
       )
     }
+    let model: string
+    try {
+      model = resolveModel(row.model)
+    } catch (err) {
+      return settingsError(c, err)
+    }
     const reply = await completePlain(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content },
       ],
       {
-        model: row.model,
+        model,
         baseUrl: row.baseUrl,
         temperature: row.temperature,
         maxTokens: row.maxTokens,
@@ -440,12 +461,17 @@ adminRoutes.get('/chatbots/:id/stats', async (c) => {
 
 adminRoutes.put('/settings', async (c) => {
   try {
-    const body = (await c.req.json()) as { apiKey?: string; baseUrl?: string }
+    const body = (await c.req.json()) as {
+      apiKey?: string
+      baseUrl?: string
+      defaultModel?: string
+    }
     if (body.apiKey !== undefined && body.apiKey.trim() !== '') {
       saveApiKey(body.apiKey.trim(), body.baseUrl)
     } else if (body.baseUrl !== undefined) {
       saveBaseUrl(body.baseUrl)
     }
+    if (body.defaultModel !== undefined) saveDefaultModel(body.defaultModel)
     return c.json(getAdminSettingsView())
   } catch (err) {
     return settingsError(c, err)
