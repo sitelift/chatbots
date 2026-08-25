@@ -35,6 +35,7 @@ import {
   saveApiKey,
   saveBaseUrl,
   saveDefaultModel,
+  saveProviderPin,
 } from '../services/settings'
 
 export const adminRoutes = new Hono()
@@ -251,8 +252,19 @@ adminRoutes.post('/import', async (c) => {
         400,
       )
     }
-    const { text, source } = await fetchSiteText(parsed.data.url)
-    const facts = await extractBusinessFacts(text, model)
+    const crawlStart = Date.now()
+    const { pages, source } = await fetchSiteText(parsed.data.url)
+    const chars = pages.reduce((sum, p) => sum + p.text.length, 0)
+    logger.info(
+      { url: parsed.data.url, pages: pages.length, chars, ms: Date.now() - crawlStart },
+      'import: crawl complete',
+    )
+    const extractStart = Date.now()
+    const facts = await extractBusinessFacts(pages, model)
+    logger.info(
+      { url: parsed.data.url, ms: Date.now() - extractStart },
+      'import: extraction complete',
+    )
     return c.json({ facts, source })
   } catch (err) {
     if (err instanceof ImportError) {
@@ -465,6 +477,7 @@ adminRoutes.put('/settings', async (c) => {
       apiKey?: string
       baseUrl?: string
       defaultModel?: string
+      providerPin?: string
     }
     if (body.apiKey !== undefined && body.apiKey.trim() !== '') {
       saveApiKey(body.apiKey.trim(), body.baseUrl)
@@ -472,6 +485,7 @@ adminRoutes.put('/settings', async (c) => {
       saveBaseUrl(body.baseUrl)
     }
     if (body.defaultModel !== undefined) saveDefaultModel(body.defaultModel)
+    if (body.providerPin !== undefined) saveProviderPin(body.providerPin)
     return c.json(getAdminSettingsView())
   } catch (err) {
     return settingsError(c, err)

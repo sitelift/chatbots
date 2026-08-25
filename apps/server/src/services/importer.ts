@@ -3,9 +3,9 @@ import { type BusinessFacts, businessFactsSchema } from '@sitelift/shared'
 import { completeJson } from './provider'
 import { resolveProviderCredentials } from './settings'
 
-const MAX_SITE_TEXT = 40_000
+const MAX_SITE_TEXT = 24_000
 const MAX_HTML = 250_000
-const MAX_TOTAL_CHARS = 60_000
+const MAX_TOTAL_CHARS = 30_000
 const MAX_PAGES = 5
 const FETCH_TIMEOUT_MS = 10_000
 const MAX_REDIRECTS = 3
@@ -209,7 +209,14 @@ function extractPageLinks(html: string, base: URL): string[] {
   return Array.from(new Set(out)).slice(0, MAX_PAGES - 1)
 }
 
-export async function fetchSiteText(rawUrl: string): Promise<{ text: string; source: string }> {
+export interface PageText {
+  source: string
+  text: string
+}
+
+export async function fetchSiteText(
+  rawUrl: string,
+): Promise<{ pages: PageText[]; source: string }> {
   const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(rawUrl)
   const absolute = withScheme ? rawUrl : `https://${rawUrl}`
   let url: URL
@@ -223,64 +230,55 @@ export async function fetchSiteText(rawUrl: string): Promise<{ text: string; sou
   const pages = [{ text: home.text, source: home.source }]
   let total = home.text.length
 
-  for (const link of extractPageLinks(home.html, url)) {
-    if (pages.length >= MAX_PAGES || total >= MAX_TOTAL_CHARS) break
-    try {
-      const page = await fetchWithRedirects(new URL(link))
-      if (!page.text.trim()) continue
-      const budget = Math.min(page.text.length, MAX_TOTAL_CHARS - total)
-      if (budget <= 0) break
-      pages.push({ text: page.text.slice(0, budget), source: page.source })
-      total += budget
-    } catch (err) {
-      if (err instanceof ImportError) continue
-      throw err
+  const links = extractPageLinks(home.html, url)
+  const results = await Promise.allSettled(links.map((link) => fetchWithRedirects(new URL(link))))
+
+  for (const result of results) {
+    if (total >= MAX_TOTAL_CHARS) break
+    if (result.status === 'rejected') {
+      if (result.reason instanceof ImportError) continue
+      throw result.reason
     }
+    const page = result.value
+    if (!page.text.trim()) continue
+    const budget = Math.min(page.text.length, MAX_TOTAL_CHARS - total)
+    if (budget <= 0) break
+    pages.push({ text: page.text.slice(0, budget), source: page.source })
+    total += budget
   }
 
-  const text =
-    pages.length === 1
-      ? (pages[0]?.text ?? '')
-      : pages.map((p, i) => `[Page ${i + 1}] ${p.source}\n${p.text}`).join('\n\n')
-  return { text, source: home.source }
+  return { pages, source: home.source }
+}
+
+export function combinePages(pages: PageText[]): string {
+  return pages.length === 1
+    ? (pages[0]?.text ?? '')
+    : pages.map((p, i) => `[Page ${i + 1}] ${p.source}\n${p.text}`).join('\n\n')
 }
 
 const EXTRACT_PROMPT = `You are an assistant that extracts structured business facts from website text. Read the text below and return a single JSON object (no markdown, no extra text) that describes the business on that website.
 
 Respond with exactly this JSON shape:
 {
-  "overview": string,      // who they are, since when, what makes them different
-  "hours": string,         // opening hours, including exceptions/emergency lines
-  "location": string,      // one line: where the business is based / what area it serves
-  "contact": string,       // one line: phone, email or booking URL — keep URLs verbatim
-  "services": string,      // products and services offered
-  "pricing": string,       // prices, packages, payment methods, if stated
-  "policies": string,      // warranties, returns, guarantees, cancellation rules
-  "misc": string,          // any other useful detail not covered above
-  "faqs": [                // 15 to 20 likely visitor questions with short answers drawn from the text
-    { "q": string, "a": string }
-  ]
+  "overview": string,
+  "hours": string,
+  "location": string,
+  "contact": string,
+  "services": string,
+  "pricing": string,
+  "policies": string,
+  "misc": string,
+  "faqs": [ { "q": string, "a": string } ]
 }
 
 Rules:
-- ONLY use information present in the text. Never invent prices, hours, services, or policies.
-- Leave a field an empty string when the text gives nothing for it. Never write what is missing:
-  no "not provided", "none listed", "N/A", "no phone number is listed", or similar commentary.
-- State facts directly and tersely: one to two short sentences per field, no framing, no hedging.
-- Never describe the text or attribute claims ("the site says", "according to", "described as",
-  "it is stated that"). Write what is true, plainly.
-- Summarize instead of enumerating incidental detail (client portfolios, conference talks,
-  individual names). "Based in Iowa, serves customers nationally" beats a city list.
-- When the text says where the business is based or who it serves, say so in one line. When a
-  booking, contact or social URL exists, keep it in the contact line verbatim.
-- Keep exact numbers, prices, phone numbers and URLs verbatim. Prefer the business's own words.
-- The faqs must be answerable from the text alone.
-- Extract EVERY distinct question the text can answer, up to 20. A handful (5 or fewer) is a failure:
-  enumerate each FAQ entry, service detail, policy and contact question the text supports.
+- ONLY use information present in the text.
+- Leave a field an empty string when the text gives nothing for it.
+- State facts directly and tersely.
+- Keep exact numbers, prices, phone numbers and URLs verbatim.
 
 Website text:
 """
-
 TEXT"""`
 
 async function extractFactsWithRetry(text: string, model: string): Promise<BusinessFacts> {
@@ -298,31 +296,45 @@ async function extractFactsWithRetry(text: string, model: string): Promise<Busin
     },
     { role: 'user' as const, content: EXTRACT_PROMPT.replace('TEXT', text) },
   ]
-  const options = { model, baseUrl: null, temperature: 0, maxTokens: 8000 }
+  const options = { model, baseUrl: null, temperature: 0, noReasoning: true }
 
   let raw = await completeJson(messages, options, credentials)
   for (let attempt = 0; attempt < 1; attempt++) {
-    const trimmed = raw.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')
-    const parsed = businessFactsSchema.safeParse(JSON.parse(trimmed) as unknown)
-    if (parsed.success) return normalizeFacts(parsed.data)
+    const facts = tryParseFacts(raw)
+    if (facts) return facts
     raw = await completeJson(
       [
         ...messages,
         {
           role: 'user' as const,
-          content: `The previous response was not valid: ${(parsed.error as { issues?: { message?: string }[] }).issues?.[0]?.message ?? 'invalid JSON'}. Respond again with valid JSON only.`,
+          content: `The previous response was not valid. Respond again with valid JSON only.`,
         },
       ],
       options,
       credentials,
     )
   }
-  const trimmed = raw.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')
-  const parsed = businessFactsSchema.safeParse(JSON.parse(trimmed) as unknown)
-  if (!parsed.success) {
+  const facts = tryParseFacts(raw)
+  if (!facts) {
     throw new ImportError('EXTRACTION_FAILED', 'Could not read business facts from the website')
   }
-  return normalizeFacts(parsed.data)
+  return facts
+}
+
+function tryParseFacts(raw: string): BusinessFacts | null {
+  const trimmed = raw.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')
+  if (!trimmed) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    return null
+  }
+  const result = businessFactsSchema.safeParse(parsed)
+  if (!result.success) return null
+  const facts = normalizeFacts(result.data)
+  if (Object.keys(facts).length === 0) return null
+  return facts
 }
 
 function normalizeFacts(facts: BusinessFacts): BusinessFacts {
@@ -340,6 +352,9 @@ function normalizeFacts(facts: BusinessFacts): BusinessFacts {
   return out
 }
 
-export function extractBusinessFacts(text: string, model: string): Promise<BusinessFacts> {
-  return extractFactsWithRetry(text, model)
+export async function extractBusinessFacts(
+  pages: PageText[],
+  model: string,
+): Promise<BusinessFacts> {
+  return extractFactsWithRetry(combinePages(pages), model)
 }

@@ -7,7 +7,35 @@ export interface ProviderOptions {
   model: string
   baseUrl?: string | null
   temperature: number
-  maxTokens: number
+  maxTokens?: number
+  /** Send `reasoning: { effort: "none" }` to skip thinking traces on reasoning models. */
+  noReasoning?: boolean
+}
+
+export interface ProviderCredentialsLike {
+  apiKey: string
+  baseUrl: string
+  providerPin?: string
+}
+
+export function requestBody(
+  options: ProviderOptions,
+  messages: ProviderMessage[],
+  extra: Record<string, unknown>,
+  credentials: ProviderCredentialsLike,
+) {
+  const baseUrl = options.baseUrl ?? credentials.baseUrl
+  const isOpenRouter = /openrouter\.ai/i.test(baseUrl)
+  const providerPin = isOpenRouter && credentials.providerPin ? credentials.providerPin : ''
+  return JSON.stringify({
+    model: options.model,
+    messages,
+    temperature: options.temperature,
+    ...(options.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
+    ...(options.noReasoning ? { reasoning: { effort: 'none' } } : {}),
+    ...(providerPin ? { provider: { only: [providerPin], allow_fallbacks: false } } : {}),
+    ...extra,
+  })
 }
 
 export interface StreamResult {
@@ -40,7 +68,7 @@ function parseFrame(json: string): ParsedChunk {
 export async function completePlain(
   messages: ProviderMessage[],
   options: ProviderOptions,
-  credentials: { apiKey: string; baseUrl: string },
+  credentials: ProviderCredentialsLike,
 ): Promise<string> {
   const res = await fetch(`${options.baseUrl ?? credentials.baseUrl}/chat/completions`, {
     method: 'POST',
@@ -48,12 +76,8 @@ export async function completePlain(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${credentials.apiKey}`,
     },
-    body: JSON.stringify({
-      model: options.model,
-      messages,
-      temperature: options.temperature,
-      max_tokens: options.maxTokens,
-    }),
+    body: requestBody(options, messages, {}, credentials),
+    signal: AbortSignal.timeout(300_000),
   })
 
   if (!res.ok) {
@@ -70,7 +94,7 @@ export async function completePlain(
 export async function completeJson(
   messages: ProviderMessage[],
   options: ProviderOptions,
-  credentials: { apiKey: string; baseUrl: string },
+  credentials: ProviderCredentialsLike,
 ): Promise<string> {
   const res = await fetch(`${options.baseUrl ?? credentials.baseUrl}/chat/completions`, {
     method: 'POST',
@@ -78,13 +102,8 @@ export async function completeJson(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${credentials.apiKey}`,
     },
-    body: JSON.stringify({
-      model: options.model,
-      messages,
-      temperature: options.temperature,
-      max_tokens: options.maxTokens,
-      response_format: { type: 'json_object' },
-    }),
+    body: requestBody(options, messages, { response_format: { type: 'json_object' } }, credentials),
+    signal: AbortSignal.timeout(300_000),
   })
 
   if (!res.ok) {
@@ -101,7 +120,7 @@ export async function completeJson(
 export async function streamCompletion(
   messages: ProviderMessage[],
   options: ProviderOptions,
-  credentials: { apiKey: string; baseUrl: string },
+  credentials: ProviderCredentialsLike,
   onToken: (text: string) => void,
 ): Promise<StreamResult> {
   const res = await fetch(`${options.baseUrl ?? credentials.baseUrl}/chat/completions`, {
@@ -110,14 +129,15 @@ export async function streamCompletion(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${credentials.apiKey}`,
     },
-    body: JSON.stringify({
-      model: options.model,
+    body: requestBody(
+      options,
       messages,
-      temperature: options.temperature,
-      max_tokens: options.maxTokens,
-      stream: true,
-      stream_options: { include_usage: true },
-    }),
+      {
+        stream: true,
+        stream_options: { include_usage: true },
+      },
+      credentials,
+    ),
   })
 
   if (!res.ok || !res.body) {

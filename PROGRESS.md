@@ -132,6 +132,32 @@
 </details>
 
 <details>
+<summary><strong>Create wizard — two-panel Linear-style redesign (DONE)</strong></summary>
+
+- **Layout:** the four-step flow is now a split view — a centered, typographic form column on the
+  left and an **always-visible live `WidgetSim` preview rail** (sticky on `lg+`) on the right that
+  updates as you type (name in the header, welcome message, quick replies, brand color, logo).
+  Old left-hugging "card-in-a-card" shell replaced by open typography (no nested boxes / dividers
+  around a two-field step).
+- **Step chrome:** the icon-plus-slash stepper is gone — replaced by a whisper "Step N of 4" plus
+  four thin progress segments (current = short ink accent, completed clickable to jump back).
+  Each step gets its own display heading + one-line subtitle (`STEP_META`).
+- **Micro-delights:** name field autofocuses; Enter advances on the Basics step; pasting a website
+  URL **auto-derives the name** from the domain; a **"Skip — finish later"** text escape appears
+  once a name exists (creates with what's there) — optimized for agencies creating their Nth bot.
+- **Knowledge step:** `KnowledgeEditor` gained an `aside` prop (default `true`, so the tabbed
+  editor is unchanged). The wizard passes `aside={false}` so facts render in the left column while
+  the widget preview holds the rail; a lightweight "Review what it knows" collapsible (coverage bar
+  + assembled-prompt) replaces the editor's sticky coverage/prompt pane.
+  (`apps/dashboard/src/components/chatbot/KnowledgeEditor.tsx`)
+- "Cancel"/"Back" (left) and "Continue"/"Create chatbot" (right) footer nav, with a one-line
+  "You can change everything later in the editor" reassurance. Old wizard saved at
+  `apps/dashboard/NewChatbot.wizard-old.bak` for rollback; git HEAD also contains it.
+- Tests: `tests/NewChatbot.test.tsx` unchanged and green (name-gate, import-first, example-clear,
+  create → editor leads, status in payload) — 28 dashboard tests pass.
+</details>
+
+<details>
 <summary><strong>Leads graphs + editor taste pass (DONE)</strong></summary>
 
 - **Activity stats on the Leads tab** (above the inbox): new `GET /api/admin/chatbots/:id/stats?days=30`
@@ -201,6 +227,26 @@
   shows `Default` for bots without an override; create/editor copy updated.
 - Tests: settings.test.ts covers save/clear of the default and the `MODEL_NOT_CONFIGURED` path;
   chat/importer tests set a global default via `setDefaultModel()`.
+</details>
+
+<details>
+<summary><strong>Import speed — crawl parallelized (DONE)</strong></summary>
+
+- **Parallel crawl:** sub-pages are fetched concurrently (`Promise.allSettled`) instead of sequentially — worst case drops from ~50s (5 × 10s timeout) to ~10s. Same 5-page cap, same-origin + junk-path filters, text budget applied after.
+- **Smaller extraction prompt:** combined site text capped at 30k chars (was 60k), per-page 24k (was 40k) — faster prefill, fewer tokens billed.
+- **Timing logs:** `import: crawl complete` and `import: extraction complete` (pino) show ms per phase, so slow imports are diagnosable.
+- Tests: importer suite green (50 server tests pass).
+</details>
+
+<details>
+<summary><strong>Import speed — reasoning disabled + empty-result guard (DONE)</strong></summary>
+
+- **Root cause of slow imports:** `deepseek-v4-flash` is a reasoning model. Without `reasoning: { effort: "none" }` every call emitted a long thinking trace that exploded on big inputs (300s timeouts). Disabling reasoning took a full-site extraction from timeout → ~18-50s depending on OpenRouter provider routing.
+- **Prompt is the goldilocks zone:** short extract prompt (terse rules, no 15-20-FAQ demand) produced rich, fast output (30 FAQs, all fields filled). The old verbose prompt + reasoning ON was the worst of both worlds.
+- **No max-tokens cap on extraction** — the model decides output length (the earlier 4096 cap truncated JSON and caused the retry loop).
+- **Empty-result guard:** empty/`{}`/unparseable extractions now throw `EXTRACTION_FAILED` instead of returning a blank draft that would wipe dashboard fields.
+- **Parallel crawl + phase timing logs** retained from earlier: sub-pages fetched concurrently, `import: crawl complete` / `import: extraction complete` pino logs with ms.
+- **Provider pin (OpenRouter only):** optional Settings field — `provider: { only: [slug], allow_fallbacks: false }` routes every request to one specific OpenRouter upstream for consistent speed. Hidden unless OpenRouter base URL is selected. Verified working: `only` (not `order`) is the reliable field with `~`-prefixed model slugs; `sort: 'latency'` also works (~1.5s vs 11s on this model). Tests: 52 server tests pass.
 </details>
 
 ## Known gaps / tech debt (honest)
@@ -284,6 +330,10 @@ seeded — fresh installs start with a blank chatbot list.
 ## Commit trail (this rebuild)
 
 ```
+<uncommitted> feat: provider pin (OpenRouter only) — `provider: {only:[slug]}` routing, Settings field hidden unless OpenRouter, settings storage + tests
+<uncommitted> perf: import — disable reasoning traces on extraction (`reasoning: {effort: none}`, goldilocks short prompt, no max-tokens cap) + empty-result guard throws EXTRACTION_FAILED instead of blank draft; provider request body builder
+<uncommitted> perf: import — parallel sub-page crawl, extraction prompt 60k→30k chars, output cap 8000→4096, 120s provider abort, phase timing logs
+<uncommitted> design: create wizard — two-panel Linear-style flow (typographic centered steps + sticky live widget preview rail), whisper progress segments, URL-derived name, Enter-to-continue, skip-and-create escape; KnowledgeEditor gains aside prop
 <uncommitted> chore: no demo chatbot seed on boot — fresh installs start blank
 <uncommitted> feat: no default model — per-bot override or Settings default, else explicit MODEL_NOT_CONFIGURED (chat/test/import); migration nulls old implicit gpt-4o-mini; Settings default-model field; ModelPicker global-default option
 <uncommitted> feat: zero-config encryption — auto-generated app secret on first launch (env override kept), better-auth uses it, Settings UI shows key location, compose passthrough

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db } from '../src/db'
 import { settings } from '../src/db/schema'
 import { createApp } from '../src/index'
+import { requestBody } from '../src/services/provider'
 import { resolveProviderCredentials } from '../src/services/settings'
 import {
   clearDefaultModel,
@@ -155,6 +156,57 @@ describe('admin settings API', () => {
     })
     expect(cleared.status).toBe(200)
     expect((await cleared.json()).defaultModel).toBe('')
+  })
+
+  it('stores and clears the OpenRouter provider pin', async () => {
+    const put = await createApp().request('/api/admin/settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ providerPin: 'deepseek' }),
+    })
+    expect(put.status).toBe(200)
+    expect((await put.json()).providerPin).toBe('deepseek')
+    expect(resolveProviderCredentials().providerPin).toBe('deepseek')
+
+    const cleared = await createApp().request('/api/admin/settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ providerPin: '  ' }),
+    })
+    expect(cleared.status).toBe(200)
+    expect((await cleared.json()).providerPin).toBe('')
+    expect(resolveProviderCredentials().providerPin).toBe('')
+  })
+
+  it('pins requests to a provider only for OpenRouter base URLs', () => {
+    const options = { model: 'test-mini', temperature: 0 }
+    const messages = [{ role: 'user' as const, content: 'hi' }]
+    const withPin = requestBody(
+      options,
+      messages,
+      {},
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1', providerPin: 'deepseek' },
+    )
+    expect(JSON.parse(withPin).provider).toEqual({
+      only: ['deepseek'],
+      allow_fallbacks: false,
+    })
+
+    const withoutPin = requestBody(
+      options,
+      messages,
+      {},
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1' },
+    )
+    expect(JSON.parse(withoutPin).provider).toBeUndefined()
+
+    const nonOpenRouter = requestBody(
+      options,
+      messages,
+      {},
+      { apiKey: 'k', baseUrl: 'https://api.openai.com/v1', providerPin: 'deepseek' },
+    )
+    expect(JSON.parse(nonOpenRouter).provider).toBeUndefined()
   })
 
   it('rejects chat with a clear error when no model is configured anywhere', async () => {

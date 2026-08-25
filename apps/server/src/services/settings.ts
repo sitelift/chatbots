@@ -8,6 +8,7 @@ import { resolveAppSecret, secretFilePath, secretSource } from '../lib/secrets'
 const AI_KEY_ROW = 'ai_api_key_enc'
 const AI_BASE_URL_ROW = 'ai_base_url'
 const AI_DEFAULT_MODEL_ROW = 'ai_default_model'
+const AI_PROVIDER_PIN_ROW = 'ai_provider_pin'
 
 interface StoredKey {
   secret: EncryptedSecret
@@ -18,6 +19,8 @@ export interface ProviderCredentials {
   apiKey: string
   baseUrl: string
   source: 'settings' | 'env' | 'none'
+  /** OpenRouter provider slug to pin requests to (empty = automatic routing). */
+  providerPin: string
 }
 
 export class SettingsError extends Error {
@@ -45,6 +48,7 @@ export function getAdminSettingsView() {
   const stored = getSetting(AI_KEY_ROW)
   const baseUrl = getSetting(AI_BASE_URL_ROW) ?? ''
   const defaultModel = getSetting(AI_DEFAULT_MODEL_ROW) ?? ''
+  const providerPin = getSetting(AI_PROVIDER_PIN_ROW) ?? ''
   let hint = ''
   if (stored) {
     try {
@@ -57,6 +61,7 @@ export function getAdminSettingsView() {
     keySource: stored ? 'settings' : env.openaiApiKey ? 'env' : 'none',
     baseUrl,
     defaultModel,
+    providerPin,
     encryptionAvailable: true,
     encryptionSource: secretSource(),
     encryptionFilePath: secretSource() === 'generated' ? secretFilePath() : null,
@@ -74,6 +79,19 @@ export function saveDefaultModel(model: string): void {
 
 export function getDefaultModel(): string {
   return getSetting(AI_DEFAULT_MODEL_ROW) ?? ''
+}
+
+export function getProviderPin(): string {
+  return getSetting(AI_PROVIDER_PIN_ROW) ?? ''
+}
+
+export function saveProviderPin(pin: string): void {
+  const trimmed = pin.trim()
+  if (trimmed === '') {
+    db.delete(settings).where(eq(settings.key, AI_PROVIDER_PIN_ROW)).run()
+    return
+  }
+  setSetting(AI_PROVIDER_PIN_ROW, trimmed)
 }
 
 export function resolveModel(model: string | null): string {
@@ -109,10 +127,11 @@ export function resolveProviderCredentials(): ProviderCredentials {
     const passphrase = resolveAppSecret()
     try {
       const apiKey = decryptSecret((JSON.parse(stored) as StoredKey).secret, passphrase)
-      return { apiKey, baseUrl, source: 'settings' }
+      return { apiKey, baseUrl, source: 'settings', providerPin: getProviderPin() }
     } catch {}
   }
 
-  if (env.openaiApiKey) return { apiKey: env.openaiApiKey, baseUrl, source: 'env' }
-  return { apiKey: '', baseUrl, source: 'none' }
+  if (env.openaiApiKey)
+    return { apiKey: env.openaiApiKey, baseUrl, source: 'env', providerPin: getProviderPin() }
+  return { apiKey: '', baseUrl, source: 'none', providerPin: getProviderPin() }
 }

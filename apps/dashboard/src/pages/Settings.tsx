@@ -11,6 +11,7 @@ interface SettingsView {
   keySource: 'settings' | 'env' | 'none'
   baseUrl: string
   defaultModel: string
+  providerPin: string
   encryptionAvailable: boolean
   encryptionSource: 'env' | 'file' | 'generated'
   encryptionFilePath: string | null
@@ -21,6 +22,7 @@ export function SettingsPage() {
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [baseUrlInput, setBaseUrlInput] = useState('')
   const [defaultModelInput, setDefaultModelInput] = useState('')
+  const [providerPinInput, setProviderPinInput] = useState('')
   const [replacing, setReplacing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -32,6 +34,7 @@ export function SettingsPage() {
       setView(data)
       setBaseUrlInput(data.baseUrl)
       setDefaultModelInput(data.defaultModel)
+      setProviderPinInput(data.providerPin)
     } catch (err) {
       const api = (err as Error & { api?: AdminApiError }).api
       setError(api?.message ?? 'Failed to load settings')
@@ -47,9 +50,15 @@ export function SettingsPage() {
     setError('')
     setSaved(false)
     try {
-      const body: { apiKey?: string; baseUrl?: string; defaultModel?: string } = {
+      const body: {
+        apiKey?: string
+        baseUrl?: string
+        defaultModel?: string
+        providerPin?: string
+      } = {
         baseUrl: baseUrlInput,
         defaultModel: defaultModelInput,
+        providerPin: providerPinInput,
       }
       if (replacing || view?.keySource === 'none') body.apiKey = apiKeyInput
       const data = await apiFetch<SettingsView>('/api/admin/settings', {
@@ -59,6 +68,7 @@ export function SettingsPage() {
       setView(data)
       setApiKeyInput('')
       setReplacing(false)
+      setProviderPinInput(data.providerPin)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch (err) {
@@ -72,7 +82,8 @@ export function SettingsPage() {
   const connected = view?.hasKey ?? false
   const dirty =
     (baseUrlInput ?? '') !== (view?.baseUrl ?? '') ||
-    (defaultModelInput ?? '') !== (view?.defaultModel ?? '')
+    (defaultModelInput ?? '') !== (view?.defaultModel ?? '') ||
+    (providerPinInput ?? '') !== (view?.providerPin ?? '')
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
@@ -175,6 +186,29 @@ export function SettingsPage() {
               <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
                 {presetForBaseUrl(baseUrlInput)?.hint}
               </p>
+            )}
+
+            {presetForBaseUrl(baseUrlInput)?.id === 'openrouter' && (
+              <>
+                <label htmlFor="providerpin" className="mt-4 block text-sm font-medium">
+                  Provider pin
+                </label>
+                <input
+                  id="providerpin"
+                  type="text"
+                  autoComplete="off"
+                  value={providerPinInput}
+                  onChange={(e) => setProviderPinInput(e.target.value)}
+                  placeholder="deepseek, deepinfra, google-vertex…"
+                  className={`${inputClass} mt-1.5 font-mono`}
+                />
+                <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                  Route every request to one specific OpenRouter provider for consistent speed (e.g.{' '}
+                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">deepseek</code>,{' '}
+                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">deepinfra</code>
+                  ). Leave empty to let OpenRouter auto-balance across providers.
+                </p>
+              </>
             )}
           </div>
 
