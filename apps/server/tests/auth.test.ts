@@ -94,11 +94,11 @@ describe('chatbot CRUD', () => {
       hours: 'Mon–Fri 8am–6pm',
       faqs: [{ q: 'Emergency service?', a: 'Yes, 24/7 for members.' }],
     })
-    expect(view.systemPrompt).toContain('Business facts (JSON):')
-    expect(view.systemPrompt).toContain('"overview":"Family-owned HVAC in Austin."')
-    expect(view.systemPrompt).toContain(
-      '"faqs":[{"q":"Emergency service?","a":"Yes, 24/7 for members."}]',
-    )
+    expect(view.systemPrompt).toContain('Business facts:')
+    expect(view.systemPrompt).toContain('Overview:\nFamily-owned HVAC in Austin.')
+    expect(view.systemPrompt).toContain('Hours:\nMon–Fri 8am–6pm')
+    expect(view.systemPrompt).toContain('FAQ:\nQ: Emergency service?\nA: Yes, 24/7 for members.')
+    expect(view.systemPrompt).toContain('Reply in plain text only.')
   })
 
   it('lists it, updates it, deletes it', async () => {

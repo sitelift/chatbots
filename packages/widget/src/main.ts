@@ -116,13 +116,20 @@ function styles(): string {
     .messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 13px; background: #ffffff; scrollbar-width: thin; scrollbar-color: #e4e4e7 transparent; }
     .messages::-webkit-scrollbar { width: 5px; }
     .messages::-webkit-scrollbar-thumb { background: #e4e4e7; border-radius: 9999px; }
-    .msg { font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; animation: sl-rise 200ms cubic-bezier(0.25, 1, 0.5, 1); }
+    .msg { font-size: 14px; line-height: 1.55; word-break: break-word; animation: sl-rise 200ms cubic-bezier(0.25, 1, 0.5, 1); }
     @keyframes sl-rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
     .msg.bot { color: #3a3a40; padding: 1px 2px; }
+    .msg.bot p { margin: 0 0 8px; }
+    .msg.bot p:last-child { margin-bottom: 0; }
+    .msg.bot ul, .msg.bot ol { margin: 2px 0 8px; padding-left: 20px; }
+    .msg.bot li { margin: 2px 0; }
+    .msg.bot code { background: #f4f4f5; border-radius: 5px; padding: 1px 5px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .msg.bot a { color: var(--sl-brand); text-decoration: underline; text-underline-offset: 2px; }
+    .msg.bot hr { border: none; border-top: 1px solid #e4e4e7; margin: 8px 0; }
     .msg.user {
       align-self: flex-end; max-width: 84%; padding: 9px 13px;
       background: color-mix(in srgb, var(--sl-brand) 11%, #ffffff);
-      border-radius: 16px 16px 5px 16px; color: #232326;
+      border-radius: 16px 16px 5px 16px; color: #232326; white-space: pre-wrap;
     }
     .caret { display: inline-block; width: 2px; height: 14px; background: var(--sl-brand); vertical-align: -2px; margin-left: 2px; border-radius: 1px; animation: sl-blink 800ms steps(1) infinite; }
     @keyframes sl-blink { 50% { opacity: 0; } }
@@ -405,7 +412,8 @@ class SiteLiftWidget {
         }
       }
 
-      botBubble.textContent = reply || 'Sorry, I could not answer that.'
+      const clean = unwrapReply(reply) ?? reply
+      botBubble.innerHTML = clean ? renderMarkdown(clean) : 'Sorry, I could not answer that.'
     } catch (err) {
       botBubble.textContent = friendlyError(err)
       botBubble.classList.add('error')
@@ -422,6 +430,93 @@ function escapeHtml(text: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
+}
+
+function unwrapReply(text: string): string | null {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{')) return null
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    for (const key of ['answer', 'reply', 'text', 'content']) {
+      const value = parsed[key]
+      if (typeof value === 'string' && value.trim()) return value
+    }
+    const keys = Object.keys(parsed)
+    if (keys.length === 1) {
+      const value = parsed[keys[0]!]
+      if (typeof value === 'string') return value
+    }
+  } catch {}
+  return null
+}
+
+function renderInline(src: string): string {
+  const saved: string[] = []
+  let html = escapeHtml(src)
+  html = html.replace(/`([^`]+)`/g, (_m, code) => {
+    saved.push(`<code>${code}</code>`)
+    return `\uE000${saved.length - 1}\uE000`
+  })
+  html = html.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)/g,
+    (_m, label, url) => {
+      saved.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`)
+      return `\uE000${saved.length - 1}\uE000`
+    },
+  )
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+  return html.replace(/\uE000(\d+)\uE000/g, (_m, i) => saved[Number(i)] ?? '')
+}
+
+function renderMarkdown(text: string): string {
+  const lines = text.replace(/\r\n/g, '\n').split('\n')
+  const blocks: string[] = []
+  let list: { tag: 'ul' | 'ol'; items: string[] } | null = null
+
+  const flushList = () => {
+    if (!list) return
+    const items = list.items.map((item) => `<li>${renderInline(item)}</li>`).join('')
+    blocks.push(`<${list.tag}>${items}</${list.tag}>`)
+    list = null
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed === '') {
+      flushList()
+      continue
+    }
+    const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed)
+    if (heading) {
+      flushList()
+      const level = heading[1]!.length
+      const tag = level === 1 ? 'h3' : level === 2 ? 'h4' : 'h5'
+      blocks.push(`<${tag}>${renderInline(heading[2]!)}</${tag}>`)
+      continue
+    }
+    if (/^(?:---+|\*\*\*+)$/.test(trimmed)) {
+      flushList()
+      blocks.push('<hr>')
+      continue
+    }
+    const bullet = /^[-*•]\s+(.+)$/.exec(trimmed)
+    const numbered = /^\d+[.)]\s+(.+)$/.exec(trimmed)
+    if (bullet || numbered) {
+      const tag = bullet ? 'ul' : 'ol'
+      if (!list || list.tag !== tag) {
+        flushList()
+        list = { tag, items: [] }
+      }
+      list.items.push((bullet?.[1] ?? numbered![1]!).trim())
+      continue
+    }
+    flushList()
+    const content = renderInline(trimmed)
+    blocks.push(`<p>${content}</p>`)
+  }
+  flushList()
+  return blocks.join('')
 }
 
 function friendlyError(err: unknown): string {

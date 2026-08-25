@@ -25,21 +25,46 @@ export const GUARDRAILS = [
   'You are the AI assistant for the business described below.',
   '- Answer ONLY from the facts provided. If something is not covered, say honestly that you are not sure.',
   '- Never invent prices, hours, availability, or policies.',
-  '- Keep replies short, warm and helpful.',
+  '- Be brief: reply in 1-2 short sentences, under ~30 words. Only write more when the visitor asks for detail.',
+  '- Reply in plain text only. Never use JSON, code blocks, or markup the visitor would have to decode.',
   '- For anything urgent or sensitive, point the visitor to the listed phone or contact details.',
 ].join('\n')
 
-function factsToJson(facts: BusinessFacts): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(facts)) {
-    if (key === 'faqs') {
-      const faqs = (facts.faqs ?? []).filter((f) => f.q.trim() && f.a.trim())
-      if (faqs.length) out.faqs = faqs
-      continue
+const SECTION_LABELS: Record<string, string> = {
+  overview: 'Overview',
+  hours: 'Hours',
+  location: 'Location',
+  contact: 'Contact',
+  services: 'Services',
+  pricing: 'Pricing',
+  policies: 'Policies',
+  misc: 'Notes',
+}
+
+const SECTION_ORDER = [
+  'overview',
+  'hours',
+  'location',
+  'contact',
+  'services',
+  'pricing',
+  'policies',
+  'misc',
+] as const
+
+function toSections(facts: BusinessFacts): string[] {
+  const sections: string[] = []
+  for (const key of SECTION_ORDER) {
+    const value = facts[key]
+    if (typeof value === 'string' && value.trim() !== '') {
+      sections.push(`${SECTION_LABELS[key]}:\n${value.trim()}`)
     }
-    if (typeof value === 'string' && value.trim() !== '') out[key] = value.trim()
   }
-  return out
+  const faqs = (facts.faqs ?? []).filter((f) => f.q.trim() && f.a.trim())
+  if (faqs.length) {
+    sections.push(`FAQ:\n${faqs.map((f) => `Q: ${f.q.trim()}\nA: ${f.a.trim()}`).join('\n\n')}`)
+  }
+  return sections
 }
 
 /**
@@ -47,7 +72,7 @@ function factsToJson(facts: BusinessFacts): Record<string, unknown> {
  * the dashboard (live preview) — they must never drift.
  */
 export function composeSystemPrompt(facts: BusinessFacts): string {
-  const factsJson = JSON.stringify(factsToJson(facts))
-  if (factsJson === '{}') return ''
-  return `${GUARDRAILS}\n\n---\n\nBusiness facts (JSON):\n${factsJson}`
+  const sections = toSections(facts)
+  if (sections.length === 0) return ''
+  return `${GUARDRAILS}\n\n---\n\nBusiness facts:\n\n${sections.join('\n\n')}`
 }

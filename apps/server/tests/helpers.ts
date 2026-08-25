@@ -85,6 +85,12 @@ export function setJsonCompletionContent(content: string): void {
   jsonCompletionContent = content
 }
 
+let streamContent = ''
+
+export function setStreamContent(content: string): void {
+  streamContent = content
+}
+
 export function getLastCompletionMessages(): Array<{ role: string; content: string }> {
   return lastCompletionMessages
 }
@@ -136,14 +142,18 @@ export function startMockProvider(
           return
         }
         res.writeHead(200, { 'Content-Type': 'text/event-stream' })
-        const chunks = [
-          { choices: [{ delta: { role: 'assistant' } }] },
-          { choices: [{ delta: { content: 'Hello' } }] },
-          { choices: [{ delta: { content: ' world' } }] },
-          { choices: [], usage: { prompt_tokens: 12, completion_tokens: 3 } },
-        ]
+        const chunks = streamContent
+          ? streamContent.split(/(?<=\s)/)
+          : [
+              { choices: [{ delta: { role: 'assistant' } }] },
+              { choices: [{ delta: { content: 'Hello' } }] },
+              { choices: [{ delta: { content: ' world' } }] },
+              { choices: [], usage: { prompt_tokens: 12, completion_tokens: 3 } },
+            ]
         for (const chunk of chunks) {
-          res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+          const frame =
+            typeof chunk === 'string' ? { choices: [{ delta: { content: chunk } }] } : chunk
+          res.write(`data: ${JSON.stringify(frame)}\n\n`)
         }
         res.write('data: [DONE]\n\n')
         res.end()

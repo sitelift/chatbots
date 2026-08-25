@@ -1,4 +1,9 @@
-import { CONTEXT_MESSAGE_LIMIT, errorCodes, sendMessageRequestSchema } from '@sitelift/shared'
+import {
+  CONTEXT_MESSAGE_LIMIT,
+  errorCodes,
+  sendMessageRequestSchema,
+  unwrapJsonReply,
+} from '@sitelift/shared'
 import { eq } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { stream } from 'hono/streaming'
@@ -141,11 +146,12 @@ publicRoutes.post('/chat/:chatbotId/messages', async (c) => {
       credentials,
       () => {},
     )
-    const messageId = insertMessage(conversationId, 'assistant', result.text, {
+    const reply = unwrapJsonReply(result.text)
+    const messageId = insertMessage(conversationId, 'assistant', reply, {
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
     })
-    return c.json({ conversationId, messageId, reply: result.text })
+    return c.json({ conversationId, messageId, reply })
   } catch (err) {
     return handleError(c, err)
   }
@@ -167,19 +173,18 @@ publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
   return stream(c, async (s) => {
     await s.write(sseFrame({ event: 'meta', conversationId, messageId: userMessageId }))
 
-    let reply = ''
+    let result: Awaited<ReturnType<typeof streamCompletion>> | null = null
     let usage: { promptTokens: number | null; completionTokens: number | null } = {
       promptTokens: null,
       completionTokens: null,
     }
 
     try {
-      const result = await streamCompletion(
+      result = await streamCompletion(
         buildProviderMessages(bot.systemPrompt, history, userContent),
         bot,
         credentials,
         (text) => {
-          reply += text
           void s.write(sseFrame({ event: 'token', text }))
         },
       )
@@ -197,6 +202,7 @@ publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
       return
     }
 
+    const reply = unwrapJsonReply(result!.text)
     const assistantMessageId = insertMessage(conversationId, 'assistant', reply, usage)
     await s.write(sseFrame({ event: 'done', conversationId, messageId: assistantMessageId, reply }))
   })

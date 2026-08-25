@@ -7,6 +7,7 @@ import {
   clientUserViewSchema,
   composeSystemPrompt,
   importRequestSchema,
+  unwrapJsonReply,
 } from '@sitelift/shared'
 import { and, desc, eq, gte, inArray, isNotNull, or } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
@@ -24,7 +25,7 @@ import { logger } from '../lib/logger'
 import { CatalogError, fetchModelCatalog } from '../lib/modelCatalog'
 import { requireRole } from '../lib/session'
 import { extractBusinessFacts, fetchSiteText, ImportError } from '../services/importer'
-import { completeJson } from '../services/provider'
+import { completePlain } from '../services/provider'
 import {
   getAdminSettingsView,
   resolveProviderCredentials,
@@ -124,7 +125,7 @@ adminRoutes.post('/chatbots', async (c) => {
     factsJson: serializeFacts(input) ?? null,
     model: input.model ?? process.env.AI_MODEL ?? 'gpt-4o-mini',
     baseUrl: input.baseUrl || null,
-    temperature: input.temperature ?? 0.7,
+    temperature: input.temperature ?? 0.4,
     maxTokens: input.maxTokens ?? 512,
     status: input.status ?? ('active' as const),
     allowedDomains: input.allowedDomains ?? [],
@@ -284,7 +285,7 @@ adminRoutes.post('/chatbots/:id/test', async (c) => {
         400,
       )
     }
-    const reply = await completeJson(
+    const reply = await completePlain(
       [
         { role: 'system', content: systemPrompt },
         { role: 'user', content },
@@ -297,7 +298,7 @@ adminRoutes.post('/chatbots/:id/test', async (c) => {
       },
       credentials,
     )
-    return c.json({ reply })
+    return c.json({ reply: unwrapJsonReply(reply) })
   } catch (err) {
     logger.error({ err }, 'chatbot test failed')
     return c.json(

@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db } from '../src/db'
 import { messages } from '../src/db/schema'
 import { createApp } from '../src/index'
-import { DEMO_CHATBOT_ID, seedDemoChatbot, startMockProvider } from './helpers'
+import { DEMO_CHATBOT_ID, seedDemoChatbot, setStreamContent, startMockProvider } from './helpers'
 
 let mockProvider: Server
 
@@ -77,6 +77,41 @@ describe('POST /api/chat/:id/messages', () => {
     const body = await res.json()
     expect(body.reply).toBe('Hello world')
     expect(body.conversationId).toMatch(/^cv_/)
+  })
+})
+
+describe('JSON-wrapped model replies', () => {
+  it('unwraps a JSON reply and persists plain text', async () => {
+    setStreamContent('{"pricing":"Around $2k to $5k."}')
+    const res = await createApp().request(`/api/chat/${DEMO_CHATBOT_ID}/messages/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    const raw = await res.text()
+    const done = raw
+      .split('\n\n')
+      .filter(Boolean)
+      .map((frame) => {
+        const event = frame.match(/^event: (.+)$/m)?.[1]
+        const data = JSON.parse(frame.match(/^data: (.+)$/m)?.[1] ?? '{}')
+        return { event, data }
+      })
+      .at(-1)
+
+    expect(done?.event).toBe('done')
+    expect(done?.data.reply).toBe('Around $2k to $5k.')
+
+    const [persisted] = db
+      .select()
+      .from(messages)
+      .where(eq(messages.conversationId, done?.data.conversationId))
+      .all()
+      .filter((m) => m.role === 'assistant')
+
+    expect(persisted?.content).toBe('Around $2k to $5k.')
+    setStreamContent('')
   })
 })
 

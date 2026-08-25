@@ -80,7 +80,7 @@ Cross-cutting middleware: security headers, per-visitor + auth rate limits, requ
 
 Non-streaming `POST .../messages` retained as fallback.
 
-**Provider contract:** any OpenAI-compatible `POST {baseUrl}/chat/completions`. System prompt = assembled business facts (sections + FAQ pairs) behind a fixed guardrail prefix: be helpful, never invent prices/hours, admit unknowns, capture name/email naturally, escalate urgent things to phone/contact.
+**Provider contract:** any OpenAI-compatible `POST {baseUrl}/chat/completions`. System prompt = assembled business facts (plain-text sections + FAQ pairs, never a JSON dump) behind a fixed guardrail prefix: be helpful, brief (1-3 sentences), reply in plain text only (no JSON/markup), never invent prices/hours, admit unknowns, capture name/email naturally, escalate urgent things to phone/contact.
 
 ### 4.2 `apps/dashboard`
 

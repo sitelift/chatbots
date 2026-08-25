@@ -87,7 +87,7 @@ export const chatbots = sqliteTable('chatbots', {
   factsJson: text('facts_json'),
   model: text('model').notNull().default('gpt-4o-mini'),
   baseUrl: text('base_url'),
-  temperature: real('temperature').notNull().default(0.7),
+  temperature: real('temperature').notNull().default(0.4),
   maxTokens: integer('max_tokens').notNull().default(512),
   status: text('status', { enum: ['active', 'paused', 'archived'] })
     .notNull()

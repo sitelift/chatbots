@@ -43,3 +43,25 @@ export const nonStreamingReplySchema = z.object({
 })
 
 export type NonStreamingReply = z.infer<typeof nonStreamingReplySchema>
+
+/**
+ * Some models wrap replies in JSON (e.g. `{"answer":"..."}` or `{"pricing":"..."}`)
+ * even when not asked. Strip it so visitors and the DB only ever hold plain text.
+ */
+export function unwrapJsonReply(text: string): string {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{')) return text
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    for (const key of ['answer', 'reply', 'text', 'content']) {
+      const value = parsed[key]
+      if (typeof value === 'string' && value.trim()) return value
+    }
+    const keys = Object.keys(parsed)
+    if (keys.length === 1) {
+      const value = parsed[keys[0]!]
+      if (typeof value === 'string') return value
+    }
+  } catch {}
+  return text
+}
