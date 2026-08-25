@@ -82,6 +82,8 @@ export const chatbots = sqliteTable('chatbots', {
     .$type<string[]>()
     .notNull()
     .default(sql`'[]'`),
+  showLogo: integer('show_logo', { mode: 'boolean' }).notNull().default(true),
+  showOnlineStatus: integer('show_online', { mode: 'boolean' }).notNull().default(true),
   poweredBy: integer('powered_by', { mode: 'boolean' }).notNull().default(true),
   systemPrompt: text('system_prompt').notNull().default(''),
   factsJson: text('facts_json'),

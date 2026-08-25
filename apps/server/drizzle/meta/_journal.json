@@ -43,6 +43,13 @@
       "when": 1787367077680,
       "tag": "0005_panoramic_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787672699218,
+      "tag": "0006_bored_nightmare",
+      "breakpoints": true
     }
   ]
 }

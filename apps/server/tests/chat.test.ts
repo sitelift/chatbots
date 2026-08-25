@@ -115,6 +115,23 @@ describe('JSON-wrapped model replies', () => {
   })
 })
 
+describe('public chatbot meta', () => {
+  it('exposes widget settings with defaults', async () => {
+    const res = await createApp().request(`/api/chatbots/${DEMO_CHATBOT_ID}`)
+    expect(res.status).toBe(200)
+    const meta = await res.json()
+    expect(meta.name).toBe('Demo Business')
+    expect(meta.showLogo).toBe(true)
+    expect(meta.showOnlineStatus).toBe(true)
+    expect(meta.poweredBy).toBe(true)
+  })
+
+  it('404s unknown or paused chatbots', async () => {
+    const res = await createApp().request('/api/chatbots/ch_nope')
+    expect(res.status).toBe(404)
+  })
+})
+
 describe('guardrails', () => {
   it('rejects invalid payloads', async () => {
     const res = await createApp().request(`/api/chat/${DEMO_CHATBOT_ID}/messages`, {

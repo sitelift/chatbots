@@ -10,6 +10,8 @@ export const chatbotPublicMetaSchema = z.object({
   brandColor: z.string(),
   avatarUrl: z.string().nullable(),
   quickReplies: z.array(z.string()),
+  showLogo: z.boolean(),
+  showOnlineStatus: z.boolean(),
   poweredBy: z.boolean(),
   status: chatbotStatusSchema,
 })

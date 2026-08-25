@@ -53,11 +53,14 @@ interface FormState {
   websiteUrl: string
   welcomeMessage: string
   brandColor: string
+  avatarUrl: string
   quickReplies: string
   domains: EditableDomain[]
   status: ChatbotAdminView['status']
   facts: Omit<BusinessFacts, 'faqs'> & { faqs?: EditableFaq[] }
   model: string
+  showLogo: boolean
+  showOnlineStatus: boolean
   poweredBy: boolean
 }
 
@@ -81,6 +84,7 @@ function toForm(v: ChatbotAdminView): FormState {
     websiteUrl: v.websiteUrl ?? '',
     welcomeMessage: v.welcomeMessage,
     brandColor: v.brandColor,
+    avatarUrl: v.avatarUrl ?? '',
     quickReplies: v.quickReplies.join(', '),
     domains: (v.allowedDomains ?? []).map((d) => ({ _key: uid(), value: d })),
     status: v.status,
@@ -92,6 +96,8 @@ function toForm(v: ChatbotAdminView): FormState {
         }
       : emptyFacts(),
     model: v.model,
+    showLogo: v.showLogo,
+    showOnlineStatus: v.showOnlineStatus,
     poweredBy: v.poweredBy,
   }
 }
@@ -365,7 +371,10 @@ export function ChatbotEditor({ botId }: EditorProps) {
       websiteUrl: form.websiteUrl.trim(),
       welcomeMessage: form.welcomeMessage.trim() || view.welcomeMessage,
       brandColor: form.brandColor,
+      avatarUrl: form.avatarUrl.trim(),
       quickReplies: splitList(form.quickReplies).slice(0, 6),
+      showLogo: form.showLogo,
+      showOnlineStatus: form.showOnlineStatus,
       poweredBy: form.poweredBy,
       model: form.model.trim() || view.model,
       allowedDomains: form.domains.map((d) => d.value.trim()).filter(Boolean),
@@ -1238,17 +1247,25 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
               style={{ '--sl-brand': brand } as React.CSSProperties}
             >
               <div className="flex items-center gap-3 px-4 py-3.5">
-                <div
-                  className="grid size-9 shrink-0 place-items-center rounded-full text-sm font-semibold"
-                  style={{ background: `${brand}22`, color: brand }}
-                >
-                  {name.slice(0, 1).toUpperCase()}
-                </div>
+                {form.showLogo && (
+                  <div
+                    className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-semibold"
+                    style={{ background: `${brand}22`, color: brand }}
+                  >
+                    {form.avatarUrl.trim() ? (
+                      <img src={form.avatarUrl.trim()} alt="" className="size-full object-cover" />
+                    ) : (
+                      name.slice(0, 1).toUpperCase()
+                    )}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[15px] font-semibold text-[#111113]">{name}</p>
-                  <p className="flex items-center gap-1.5 text-xs text-[#8f8f96]">
-                    <span className="size-1.5 rounded-full bg-[#34c759]" /> Online now
-                  </p>
+                  {form.showOnlineStatus && (
+                    <p className="flex items-center gap-1.5 text-xs text-[#8f8f96]">
+                      <span className="size-1.5 rounded-full bg-[#34c759]" /> Online now
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -1619,6 +1636,73 @@ function SettingsTab({
       </section>
 
       <section className="rounded-xl border bg-card p-5 shadow-sm">
+        <h2 className="text-base font-medium">Widget Settings</h2>
+        <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+          What visitors see in the chat widget on your client's site.
+        </p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.showLogo}
+                onChange={(e) => set('showLogo', e.target.checked)}
+                className="size-4 accent-current"
+              />
+              Show logo
+            </label>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+              {form.showLogo
+                ? 'Show your logo in the header — falls back to the bot’s initial if no image.'
+                : 'Hide the logo from the widget header.'}
+            </p>
+            {form.showLogo && (
+              <div className="mt-2">
+                <input
+                  aria-label="Logo image URL"
+                  type="url"
+                  value={form.avatarUrl}
+                  onChange={(e) => set('avatarUrl', e.target.value)}
+                  placeholder="https://acme.com/logo.png"
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.showOnlineStatus}
+                onChange={(e) => set('showOnlineStatus', e.target.checked)}
+                className="size-4 accent-current"
+              />
+              Show “Online now” status
+            </label>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+              Displays a green dot and “Online now” under the bot's name.
+            </p>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.poweredBy}
+                onChange={(e) => set('poweredBy', e.target.checked)}
+                className="size-4 accent-current"
+              />
+              Show “Powered by SiteLift” badge
+            </label>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+              Adds a small link back to SiteLift under the chat.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-card p-5 shadow-sm">
         <h2 className="text-base font-medium">Embed on your client's site</h2>
         <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
           Paste this before{' '}
@@ -1757,16 +1841,6 @@ function SettingsTab({
             </div>
           )}
         </div>
-
-        <label className="mt-4 flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.poweredBy}
-            onChange={(e) => set('poweredBy', e.target.checked)}
-            className="size-4 accent-current"
-          />
-          Show “Powered by SiteLift” badge on the widget
-        </label>
       </section>
 
       <section className="rounded-xl border border-destructive/30 bg-card p-5 shadow-sm">

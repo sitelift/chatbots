@@ -132,6 +132,8 @@ publicRoutes.get('/chatbots/:id', async (c) => {
     brandColor: bot.brandColor,
     avatarUrl: bot.avatarUrl,
     quickReplies: bot.quickReplies,
+    showLogo: bot.showLogo,
+    showOnlineStatus: bot.showOnlineStatus,
     poweredBy: bot.poweredBy,
     status: bot.status,
   })

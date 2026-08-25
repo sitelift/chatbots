@@ -11,6 +11,8 @@ interface ChatbotMeta {
   brandColor: string
   avatarUrl: string | null
   quickReplies: string[]
+  showLogo: boolean
+  showOnlineStatus: boolean
   poweredBy: boolean
 }
 
@@ -238,10 +240,10 @@ class SiteLiftWidget {
     panel.setAttribute('aria-label', `Chat with ${this.meta.name}`)
     panel.innerHTML = `
       <div class="header">
-        <div class="avatar">${this.meta.avatarUrl ? `<img src="${this.meta.avatarUrl}" alt="">` : escapeHtml(this.meta.name.slice(0, 1).toUpperCase())}</div>
+        ${this.meta.showLogo ? `<div class="avatar">${this.meta.avatarUrl ? `<img src="${this.meta.avatarUrl}" alt="">` : escapeHtml(this.meta.name.slice(0, 1).toUpperCase())}</div>` : ''}
         <div class="who">
           <div class="title">${escapeHtml(this.meta.name)}</div>
-          <div class="subtitle"><span class="presence"></span>Online now</div>
+          ${this.meta.showOnlineStatus ? '<div class="subtitle"><span class="presence"></span>Online now</div>' : ''}
         </div>
         <button class="minimize" aria-label="Close chat">${CHEVRON_ICON}</button>
       </div>

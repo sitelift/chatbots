@@ -3,7 +3,7 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** chatbot settings editor polish — typeable brand-color hex field, allowed-domains as an add-a-line list (no more comma string), status as a custom dropdown matching the model picker, and the Website URL field no longer needs `https://`. Also committing the outstanding chat-replies quality work (plain-text facts, brevity guardrails, JSON-reply unwrapping, markdown widget rendering, default temperature 0.4).
+> **Last updated:** widget settings — per-chatbot toggles for logo (on/off + custom image URL), "Online now" presence, and the powered-by badge (moved into a new Widget Settings section in the editor).
 
 ---
 
@@ -13,7 +13,7 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 66 passing (43 server · 23 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 69 passing (45 server · 24 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
@@ -213,6 +213,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 ## Commit trail (this rebuild)
 
 ```
+<uncommitted> feat: widget settings — logo on/off + custom image, "Online now" toggle, powered-by moved into Widget Settings
 <uncommitted> docs: PROGRESS.md — settings editor polish + test count refresh
 92e4ca4 feat: chatbot settings editor — typeable brand color, domain line list, status dropdown
 16193ef fix: chat replies — plain-text facts, brevity guardrails, unwrap JSON replies, markdown widget, temp 0.4

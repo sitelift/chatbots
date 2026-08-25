@@ -89,6 +89,9 @@ describe('chatbot CRUD', () => {
     expect(view.id).toMatch(/^ch_/)
     expect(view.brandColor).toBe('#18181b')
     expect(view.status).toBe('active')
+    expect(view.showLogo).toBe(true)
+    expect(view.showOnlineStatus).toBe(true)
+    expect(view.poweredBy).toBe(true)
     expect(view.facts).toEqual({
       overview: 'Family-owned HVAC in Austin.',
       hours: 'Mon–Fri 8am–6pm',
