@@ -3,7 +3,7 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** after the multi-page import crawl (same-origin pages combined) and the import now using the chatbot's model.
+> **Last updated:** chatbot settings editor polish — typeable brand-color hex field, allowed-domains as an add-a-line list (no more comma string), status as a custom dropdown matching the model picker, and the Website URL field no longer needs `https://`. Also committing the outstanding chat-replies quality work (plain-text facts, brevity guardrails, JSON-reply unwrapping, markdown widget rendering, default temperature 0.4).
 
 ---
 
@@ -13,7 +13,7 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 60 passing (38 server · 22 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 66 passing (43 server · 23 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
@@ -213,21 +213,19 @@ docker compose -f docker/docker-compose.yml up -d --build
 ## Commit trail (this rebuild)
 
 ```
-<uncommitted> feat: import section hides once facts exist; "Clear all facts" danger zone returns it
-<uncommitted> feat: import extraction — terse direct facts, no missing-info commentary, booking URLs kept verbatim
-<uncommitted> feat: import crawls same-origin pages (up to 5, 60k chars) and uses the chatbot's model
-<uncommitted> design: restore "Visitors will ask" checklist beside the Final prompt preview
-<uncommitted> design: knowledge tab — coverage checklist becomes jump-to pills in the facts header; preview owns the right pane w/ copy button
-<uncommitted> feat: system prompt now embeds facts as JSON — composeSystemPrompt + preview show the exact JSON block
-<uncommitted> feat: import pushes 15–20 FAQ pairs (was effectively ~5); dropped the wand icon from the Import button
-<uncommitted> feat: import accepts scheme-less URLs — normalized to https at the schema edge, SSRF checks unchanged
-<uncommitted> design: knowledge editor as Notion-doc — hairline sections, numbered FAQs, side-pane prompt preview
-<uncommitted> feat: import up to 20 FAQ pairs (maxTokens 8000)
-<uncommitted> feat: leads activity graphs (stats endpoint, tiles, 30-day bars)
-<uncommitted> design: editor taste pass — dirty bar, skeletons, badges, copy
-<uncommitted> feat: tabbed chatbot editor (Leads/Knowledge/Test/Settings) + all-LLM website import
-<uncommitted> refactor: remove Playground + raw-prompt mode, add Test tab + Misc field
+<uncommitted> docs: PROGRESS.md — settings editor polish + test count refresh
+92e4ca4 feat: chatbot settings editor — typeable brand color, domain line list, status dropdown
+16193ef fix: chat replies — plain-text facts, brevity guardrails, unwrap JSON replies, markdown widget, temp 0.4
+5759fdf feat: knowledge editor + import UX — Notion-doc facts, clear-all-facts, leads graphs
+7df0684 feat: import engine — multi-page crawl, chatbot-model extraction, JSON facts prompt
+e149abd design: wordmark logo replaces robot mark — theme-adaptive SVG
+232a70c feat: polished sign-on — password confirmation, fresh-install signup, post-auth redirect
+ed7fd4d docs: add gotcha — never commit local data to GitHub
+84de3c0 chore: stop tracking SQLite data files — gitignore apps/server/data
+bc63e86 docs: PROGRESS.md — session handoff with expandable architecture
 01010ce docs: document URL routing architecture and routes table
+2316961 chore: final lint cleanups after routing migration
+7a33e26 refactor: drop obsolete intent-clearing effect — URL param is the state
 833509a feat: real URL routing — TanStack Router across the dashboard
 f82136b feat: live model catalog browsing per provider
 bdeeb18 feat: provider presets + structured business-facts editor with prompt preview
