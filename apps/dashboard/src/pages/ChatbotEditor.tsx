@@ -3,6 +3,7 @@ import {
   type ChatbotStats,
   type ChatbotTestReply,
   chatbotInputSchema,
+  chatbotStatusLabels,
   composeSystemPrompt,
   type LeadView,
 } from '@sitelift/shared'
@@ -538,17 +539,17 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
 const STATUS_OPTIONS = [
   {
     value: 'active',
-    label: 'Active',
+    label: chatbotStatusLabels.active,
     description: 'Answering visitors',
   },
   {
     value: 'paused',
-    label: 'Paused',
+    label: chatbotStatusLabels.paused,
     description: 'Stops token spend',
   },
   {
     value: 'archived',
-    label: 'Archived',
+    label: chatbotStatusLabels.archived,
     description: 'Hidden from the widget',
   },
 ] as const satisfies ReadonlyArray<{
@@ -643,7 +644,7 @@ function SettingsTab({ view, form, set, armedDelete, deleting, onDelete }: Setti
                 type="button"
                 aria-haspopup="listbox"
                 aria-expanded={statusPickerOpen}
-                aria-label={`Status: ${form.status}`}
+                aria-label={`Status: ${chatbotStatusLabels[form.status]}`}
                 onClick={() => setStatusPickerOpen((o) => !o)}
                 className="flex h-9 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 text-left text-sm transition-[border-color,box-shadow] duration-150 hover:border-ring/60 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
               >

@@ -1,6 +1,6 @@
-import type { ChatbotAdminView } from '@sitelift/shared'
+import { type ChatbotStatus, chatbotStatusLabels } from '@sitelift/shared'
 
-export function StatusBadge({ status }: { status: ChatbotAdminView['status'] }) {
+export function StatusBadge({ status }: { status: ChatbotStatus }) {
   const styles = {
     active: 'bg-success/10 text-success',
     paused: 'bg-warning/10 text-warning',
@@ -16,7 +16,7 @@ export function StatusBadge({ status }: { status: ChatbotAdminView['status'] }) 
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${styles}`}
     >
       <span className={`size-1.5 rounded-full ${dot}`} />
-      {status}
+      {chatbotStatusLabels[status]}
     </span>
   )
 }

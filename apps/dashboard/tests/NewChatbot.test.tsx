@@ -145,7 +145,7 @@ describe('NewChatbot wizard', () => {
     fireEvent.click(await screen.findByText('Continue'))
     fireEvent.click(await screen.findByText('Continue'))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'paused' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Paused' }))
     fireEvent.click(screen.getByText('Create chatbot'))
 
     await waitFor(() => {

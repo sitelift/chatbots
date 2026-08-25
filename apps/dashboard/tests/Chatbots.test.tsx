@@ -50,8 +50,8 @@ describe('ChatbotsPage', () => {
 
     expect(await screen.findByText('Acme HVAC')).toBeDefined()
     expect(screen.getByText('Bella Dental')).toBeDefined()
-    expect(screen.getAllByText('active').length).toBeGreaterThan(0)
-    expect(screen.getByText('paused')).toBeDefined()
+    expect(screen.getAllByText('Active').length).toBeGreaterThan(0)
+    expect(screen.getByText('Paused')).toBeDefined()
   })
 
   it('navigates to the setup wizard from the New chatbot button', async () => {

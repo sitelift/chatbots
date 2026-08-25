@@ -3,6 +3,12 @@ import { z } from 'zod'
 export const chatbotStatusSchema = z.enum(['active', 'paused', 'archived'])
 export type ChatbotStatus = z.infer<typeof chatbotStatusSchema>
 
+export const chatbotStatusLabels: Record<ChatbotStatus, string> = {
+  active: 'Active',
+  paused: 'Paused',
+  archived: 'Archived',
+}
+
 export const chatbotPublicMetaSchema = z.object({
   id: z.string(),
   name: z.string(),

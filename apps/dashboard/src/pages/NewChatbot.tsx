@@ -1,4 +1,9 @@
-import { type ChatbotAdminView, chatbotInputSchema, composeSystemPrompt } from '@sitelift/shared'
+import {
+  type ChatbotAdminView,
+  chatbotInputSchema,
+  chatbotStatusLabels,
+  composeSystemPrompt,
+} from '@sitelift/shared'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, BookOpen, Bot, Check, LoaderCircle, Palette, Rocket } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -301,7 +306,7 @@ export function NewChatbotPage() {
                         : 'text-muted-foreground hover:bg-muted'
                     }`}
                   >
-                    {s}
+                    {chatbotStatusLabels[s]}
                   </button>
                 ))}
               </div>

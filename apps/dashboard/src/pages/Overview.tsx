@@ -1,4 +1,4 @@
-import type { ChatbotAdminView } from '@sitelift/shared'
+import { type ChatbotAdminView, chatbotStatusLabels } from '@sitelift/shared'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Bot, MessageSquare, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -97,7 +97,7 @@ export function Overview() {
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >
-                    {b.status}
+                    {chatbotStatusLabels[b.status]}
                   </span>
                 </button>
               </li>
