@@ -126,12 +126,8 @@ export function ColorField({ value, onChange }: ColorFieldProps) {
 
   return (
     <div className="relative" ref={rootRef}>
-      <button
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className={`flex h-9 w-full items-center gap-2.5 rounded-md border px-2.5 text-left transition-[border-color,background-color,box-shadow] duration-150 hover:border-ring/40 focus-visible:border-ring focus-visible:bg-background focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/15 ${
+      <div
+        className={`flex h-9 w-full items-center gap-2.5 rounded-md border px-2.5 transition-[border-color,background-color,box-shadow] duration-150 focus-within:border-ring focus-within:bg-background focus-within:ring-[3px] focus-within:ring-ring/15 ${
           open ? 'border-ring bg-background ring-[3px] ring-ring/15' : 'border-input bg-muted/30'
         }`}
       >
@@ -139,13 +135,36 @@ export function ColorField({ value, onChange }: ColorFieldProps) {
           className="size-5 shrink-0 rounded-[5px] border border-black/15 dark:border-white/25"
           style={{ backgroundColor: value }}
         />
-        <span className="flex-1 font-mono text-xs uppercase tracking-wide">
-          {value.toUpperCase()}
-        </span>
-        <ChevronDown
-          className={`size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        <input
+          type="text"
+          aria-label="Brand color hex"
+          value={value.toUpperCase()}
+          onChange={(e) => {
+            const raw = e.target.value.trim()
+            if (/^#?[0-9a-fA-F]{1,6}$/.test(raw)) {
+              onChange(raw.startsWith('#') ? raw.toLowerCase() : `#${raw.toLowerCase()}`)
+            }
+          }}
+          onBlur={(e) => {
+            const raw = e.target.value.trim()
+            if (!/^#?[0-9a-fA-F]{6}$/.test(raw)) onChange(value)
+          }}
+          maxLength={7}
+          spellCheck={false}
+          className="flex-1 bg-transparent font-mono text-xs uppercase tracking-wide outline-none"
         />
-      </button>
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <ChevronDown
+            className={`size-3.5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+      </div>
 
       {open && (
         <div className="absolute z-20 mt-1.5 w-[264px] rounded-lg border bg-popover p-3 shadow-lg">

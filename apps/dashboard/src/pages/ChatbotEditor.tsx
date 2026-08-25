@@ -43,13 +43,18 @@ interface EditableFaq extends FaqPair {
   _key: string
 }
 
+interface EditableDomain {
+  _key: string
+  value: string
+}
+
 interface FormState {
   name: string
   websiteUrl: string
   welcomeMessage: string
   brandColor: string
   quickReplies: string
-  domains: string
+  domains: EditableDomain[]
   status: ChatbotAdminView['status']
   facts: Omit<BusinessFacts, 'faqs'> & { faqs?: EditableFaq[] }
   model: string
@@ -77,7 +82,7 @@ function toForm(v: ChatbotAdminView): FormState {
     welcomeMessage: v.welcomeMessage,
     brandColor: v.brandColor,
     quickReplies: v.quickReplies.join(', '),
-    domains: (v.allowedDomains ?? []).join(', '),
+    domains: (v.allowedDomains ?? []).map((d) => ({ _key: uid(), value: d })),
     status: v.status,
     facts: v.facts
       ? {
@@ -363,7 +368,7 @@ export function ChatbotEditor({ botId }: EditorProps) {
       quickReplies: splitList(form.quickReplies).slice(0, 6),
       poweredBy: form.poweredBy,
       model: form.model.trim() || view.model,
-      allowedDomains: splitList(form.domains),
+      allowedDomains: form.domains.map((d) => d.value.trim()).filter(Boolean),
       status: form.status,
       facts: cleanFacts(form.facts),
       systemPrompt: undefined,
@@ -1167,11 +1172,6 @@ function ImportReview({
 const WIDGET = {
   bg: '#ffffff',
   ink: '#18181b',
-  muted: '#8f8f96',
-  siteBorder: '#ececef',
-  siteCardBg: '#fafafa',
-  siteLine: '#e7e7ea',
-  siteLineSoft: '#efeff1',
 } as const
 
 function TestTab({ botId, form }: { botId: string; form: FormState }) {
@@ -1221,65 +1221,7 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div>
-        <div className="relative h-[560px] overflow-hidden rounded-xl border bg-muted/40 shadow-sm">
-          <div
-            className="absolute inset-0 opacity-50"
-            style={{
-              backgroundImage:
-                'radial-gradient(color-mix(in oklab, var(--muted-foreground) 16%, transparent) 1px, transparent 1px)',
-              backgroundSize: '16px 16px',
-            }}
-          />
-
-          <div className="relative mx-auto w-full max-w-md px-6 pt-12">
-            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-              <div
-                className="flex items-center gap-2.5 border-b px-4 py-3"
-                style={{ borderColor: WIDGET.siteBorder }}
-              >
-                <span
-                  className="grid size-6 place-items-center rounded-md text-[10px] font-semibold"
-                  style={{ background: WIDGET.ink, color: WIDGET.bg }}
-                >
-                  {name.slice(0, 1).toUpperCase()}
-                </span>
-                <span className="truncate text-xs font-semibold" style={{ color: WIDGET.ink }}>
-                  {name}
-                </span>
-                <span
-                  className="ml-auto flex items-center gap-3 text-[11px]"
-                  style={{ color: WIDGET.muted }}
-                >
-                  <span>Services</span>
-                  <span>Pricing</span>
-                  <span>Contact</span>
-                </span>
-              </div>
-              <div className="space-y-2.5 p-6">
-                <div className="h-4 w-3/5 rounded" style={{ background: WIDGET.siteLine }} />
-                <div className="h-4 w-2/5 rounded" style={{ background: WIDGET.siteLineSoft }} />
-                <div className="pt-1.5">
-                  <span
-                    className="inline-block h-8 w-28 rounded-md"
-                    style={{ background: WIDGET.ink }}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2 pt-3">
-                  {['services', 'reviews', 'contact'].map((id) => (
-                    <div
-                      key={id}
-                      className="h-20 rounded-lg border"
-                      style={{ borderColor: WIDGET.siteBorder, background: WIDGET.siteCardBg }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <p className="mt-3 text-center text-[11px] text-muted-foreground">
-              Your client's website
-            </p>
-          </div>
-
+        <div className="relative h-[560px] overflow-hidden rounded-xl border bg-white shadow-sm">
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
@@ -1433,6 +1375,28 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
   )
 }
 
+const STATUS_OPTIONS = [
+  {
+    value: 'active',
+    label: 'Active',
+    description: 'Answering visitors',
+  },
+  {
+    value: 'paused',
+    label: 'Paused',
+    description: 'Stops token spend',
+  },
+  {
+    value: 'archived',
+    label: 'Archived',
+    description: 'Hidden from the widget',
+  },
+] as const satisfies ReadonlyArray<{
+  value: ChatbotAdminView['status']
+  label: string
+  description: string
+}>
+
 interface SettingsTabProps {
   view: ChatbotAdminView
   form: FormState
@@ -1473,7 +1437,20 @@ function SettingsTab({
   onDelete,
 }: SettingsTabProps) {
   const [copied, setCopied] = useState(false)
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false)
+  const statusPickerRef = useRef<HTMLDivElement>(null)
   const snippet = `<script src="${window.location.origin}/embed.js" data-chatbot-id="${view.id}"></script>`
+
+  useEffect(() => {
+    if (!statusPickerOpen) return
+    function onPointerDown(e: MouseEvent) {
+      if (statusPickerRef.current && !statusPickerRef.current.contains(e.target as Node)) {
+        setStatusPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [statusPickerOpen])
 
   async function copySnippet() {
     await navigator.clipboard.writeText(snippet)
@@ -1506,30 +1483,74 @@ function SettingsTab({
               </label>
               <input
                 id="ed-url"
-                type="url"
+                type="text"
+                inputMode="url"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck="false"
                 value={form.websiteUrl}
                 onChange={(e) => set('websiteUrl', e.target.value)}
-                placeholder="https://acme.com"
+                placeholder="acme.com"
                 className={`${inputClass} mt-1.5`}
               />
             </div>
           </div>
 
           <div>
-            <label htmlFor="ed-domains" className={labelClass}>
-              Allowed domains{' '}
-              <span className="font-normal text-muted-foreground/80">
-                · widget only answers here
-              </span>
-            </label>
-            <input
-              id="ed-domains"
-              type="text"
-              value={form.domains}
-              onChange={(e) => set('domains', e.target.value)}
-              placeholder="acme.com, www.acme.com"
-              className={`${inputClass} mt-1.5 font-mono`}
-            />
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="ed-domains" className={labelClass}>
+                Allowed domains{' '}
+                <span className="font-normal text-muted-foreground/80">
+                  · widget only answers here
+                </span>
+              </label>
+              <button
+                type="button"
+                onClick={() => set('domains', [...form.domains, { _key: uid(), value: '' }])}
+                disabled={form.domains.length >= 20}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
+              >
+                <Plus className="size-3" /> Add domain
+              </button>
+            </div>
+            <div className="mt-1.5 space-y-2">
+              {form.domains.length === 0 ? (
+                <p className="text-[13px] text-muted-foreground">
+                  No domains yet — add the sites that may embed this widget.
+                </p>
+              ) : (
+                form.domains.map((domain, i) => (
+                  <div key={domain._key} className="flex items-center gap-2">
+                    <input
+                      id={i === 0 ? 'ed-domains' : undefined}
+                      aria-label={`Allowed domain ${i + 1}`}
+                      type="text"
+                      value={domain.value}
+                      onChange={(e) => {
+                        const next = [...form.domains]
+                        next[i] = { _key: domain._key, value: e.target.value }
+                        set('domains', next)
+                      }}
+                      placeholder="acme.com"
+                      className={`${inputClass} font-mono`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        set(
+                          'domains',
+                          form.domains.filter((d) => d._key !== domain._key),
+                        )
+                      }
+                      aria-label={`Remove domain ${i + 1}`}
+                      className="grid size-9 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           <div>
@@ -1540,18 +1561,59 @@ function SettingsTab({
           </div>
 
           <div>
-            <label htmlFor="ed-status" className={labelClass}>
-              Status
-            </label>
-            <select
-              id="ed-status"
-              value={form.status}
-              onChange={(e) => set('status', e.target.value as FormState['status'])}
-              className={`${inputClass} mt-1.5`}
-            >
-              <option value="active">Active — answering visitors</option>
-              <option value="paused">Paused — stops token spend</option>
-            </select>
+            <span className={labelClass}>Status</span>
+            <div className="relative mt-1.5" ref={statusPickerRef}>
+              <button
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={statusPickerOpen}
+                aria-label={`Status: ${form.status}`}
+                onClick={() => setStatusPickerOpen((o) => !o)}
+                className="flex h-9 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 text-left text-sm transition-[border-color,box-shadow] duration-150 hover:border-ring/60 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
+              >
+                <span className="flex items-center gap-2">
+                  <StatusBadge status={form.status} />
+                  <span className="text-muted-foreground">
+                    {STATUS_OPTIONS.find((o) => o.value === form.status)?.description}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${statusPickerOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {statusPickerOpen && (
+                <div className="absolute z-20 mt-1.5 w-full overflow-hidden rounded-lg border bg-popover shadow-lg">
+                  <ul className="divide-y">
+                    {STATUS_OPTIONS.map((option) => (
+                      <li key={option.value}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={option.value === form.status}
+                          onClick={() => {
+                            set('status', option.value)
+                            setStatusPickerOpen(false)
+                          }}
+                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors duration-150 hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
+                        >
+                          <StatusBadge status={option.value} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm">{option.label}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {option.description}
+                            </span>
+                          </span>
+                          {option.value === form.status && (
+                            <Check className="size-4 shrink-0 text-primary" />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
