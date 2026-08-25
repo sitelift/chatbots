@@ -90,6 +90,7 @@ describe('chatbot CRUD', () => {
     expect(view.brandColor).toBe('#18181b')
     expect(view.status).toBe('active')
     expect(view.showLogo).toBe(true)
+    expect(view.showName).toBe(true)
     expect(view.showOnlineStatus).toBe(true)
     expect(view.poweredBy).toBe(true)
     expect(view.facts).toEqual({

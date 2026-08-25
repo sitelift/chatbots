@@ -20,6 +20,7 @@ function view(overrides: Record<string, unknown> = {}) {
     avatarUrl: null,
     quickReplies: ['Hours?'],
     showLogo: true,
+    showName: true,
     showOnlineStatus: true,
     poweredBy: true,
     systemPrompt: 'You help Acme customers.',
@@ -168,7 +169,7 @@ describe('ChatbotEditor', () => {
     expect(JSON.parse(String(putCall?.[1]?.body)).name).toBe('Acme HVAC & Cooling')
   })
 
-  it('saves widget settings (logo, online status) through PUT', async () => {
+  it('saves widget settings (logo, name, online status) through PUT', async () => {
     const fetchMock = stubApi([
       { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
       { path: '/api/admin/chatbots/ch_edit1', method: 'PUT', status: 200, body: view() },
@@ -177,11 +178,10 @@ describe('ChatbotEditor', () => {
     await openTab('Settings')
 
     expect(await screen.findByText('Widget Settings')).toBeDefined()
+    expect(screen.getByRole('button', { name: /Upload logo/ })).toBeDefined()
 
-    fireEvent.change(screen.getByLabelText('Logo image URL'), {
-      target: { value: 'https://acme.com/logo.png' },
-    })
     fireEvent.click(screen.getByLabelText('Show logo'))
+    fireEvent.click(screen.getByLabelText('Show business name'))
     fireEvent.click(screen.getByLabelText('Show “Online now” status'))
     fireEvent.click(screen.getByText('Save changes'))
 
@@ -192,8 +192,8 @@ describe('ChatbotEditor', () => {
     const putCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT')
     const body = JSON.parse(String(putCall?.[1]?.body))
     expect(body.showLogo).toBe(false)
+    expect(body.showName).toBe(false)
     expect(body.showOnlineStatus).toBe(false)
-    expect(body.avatarUrl).toBe('https://acme.com/logo.png')
   })
 
   it('browses models from the global provider when no per-bot override exists', async () => {

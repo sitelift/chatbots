@@ -12,6 +12,7 @@ interface ChatbotMeta {
   avatarUrl: string | null
   quickReplies: string[]
   showLogo: boolean
+  showName: boolean
   showOnlineStatus: boolean
   poweredBy: boolean
 }
@@ -241,10 +242,15 @@ class SiteLiftWidget {
     panel.innerHTML = `
       <div class="header">
         ${this.meta.showLogo ? `<div class="avatar">${this.meta.avatarUrl ? `<img src="${this.meta.avatarUrl}" alt="">` : escapeHtml(this.meta.name.slice(0, 1).toUpperCase())}</div>` : ''}
+        ${
+          this.meta.showName || this.meta.showOnlineStatus
+            ? `
         <div class="who">
-          <div class="title">${escapeHtml(this.meta.name)}</div>
+          ${this.meta.showName ? `<div class="title">${escapeHtml(this.meta.name)}</div>` : ''}
           ${this.meta.showOnlineStatus ? '<div class="subtitle"><span class="presence"></span>Online now</div>' : ''}
-        </div>
+        </div>`
+            : ''
+        }
         <button class="minimize" aria-label="Close chat">${CHEVRON_ICON}</button>
       </div>
       <div class="messages" aria-live="polite"></div>

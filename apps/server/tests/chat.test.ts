@@ -122,6 +122,7 @@ describe('public chatbot meta', () => {
     const meta = await res.json()
     expect(meta.name).toBe('Demo Business')
     expect(meta.showLogo).toBe(true)
+    expect(meta.showName).toBe(true)
     expect(meta.showOnlineStatus).toBe(true)
     expect(meta.poweredBy).toBe(true)
   })

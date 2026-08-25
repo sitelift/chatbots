@@ -111,7 +111,7 @@ TypeScript source compiled by Vite to a single IIFE `embed.js` (no runtime depen
 
 - Fetch public metadata → render bubble + panel; store `conversationId`/`visitorId` in localStorage per chatbot.
 - Stream tokens optimistically; quick-reply chips; proactive nudge (configurable, default off); language-matched replies; graceful degradation when server/chatbot unavailable; keyboard/ARIA accessible.
-- Widget settings per chatbot: show logo (on/off, custom image URL or name initial), show "Online now" presence (on/off), powered-by badge (on/off).
+- Widget settings per chatbot: show logo (on/off, uploaded image or name initial), show business name (on/off), show "Online now" presence (on/off), powered-by badge (on/off). Header collapses gracefully as elements are toggled off.
 
 Must never break the host page: no globals beyond one namespace, scoped styles via Shadow DOM.
 
@@ -125,7 +125,7 @@ better-auth manages identity tables (users, sessions, accounts, passkeys). Appli
 
 | Table | Purpose |
 | --- | --- |
-| `chatbots` | name, website URL, welcome message, brand color/logo (show toggle + custom image), show "online now" toggle, model, base URL, temperature/max tokens, status (active/paused/archived), allowed domains, facts JSON (overview/hours/location/contact/services/pricing/policies/knowledge/FAQs), FAQ pairs JSON |
+| `chatbots` | name, website URL, welcome message, brand color/logo (show toggle + uploaded image), show name / "online now" toggles, model, base URL, temperature/max tokens, status (active/paused/archived), allowed domains, facts JSON (overview/hours/location/contact/services/pricing/policies/knowledge/FAQs), FAQ pairs JSON |
 | `client_assignments` | maps client users → chatbots (the ownership chain) |
 | `conversations` | per chatbot + visitorId; captured `visitor_name`/`visitor_email` (leads) |
 | `messages` | role, content, token usage per row |

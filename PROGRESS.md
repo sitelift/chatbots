@@ -3,7 +3,7 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** widget settings — per-chatbot toggles for logo (on/off + custom image URL), "Online now" presence, and the powered-by badge (moved into a new Widget Settings section in the editor).
+> **Last updated:** widget settings round 2 — upload a logo image directly (client-side downscale → data URL, no new endpoints), toggle the business name on/off, and the header now adapts to whatever is on/off (logo, name, online status).
 
 ---
 
@@ -213,6 +213,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 ## Commit trail (this rebuild)
 
 ```
+<uncommitted> feat: widget settings — logo upload (client-side downscale to data URL), show-name toggle, responsive header collapsing
 <uncommitted> feat: widget settings — logo on/off + custom image, "Online now" toggle, powered-by moved into Widget Settings
 <uncommitted> docs: PROGRESS.md — settings editor polish + test count refresh
 92e4ca4 feat: chatbot settings editor — typeable brand color, domain line list, status dropdown

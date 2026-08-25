@@ -83,6 +83,7 @@ export const chatbots = sqliteTable('chatbots', {
     .notNull()
     .default(sql`'[]'`),
   showLogo: integer('show_logo', { mode: 'boolean' }).notNull().default(true),
+  showName: integer('show_name', { mode: 'boolean' }).notNull().default(true),
   showOnlineStatus: integer('show_online', { mode: 'boolean' }).notNull().default(true),
   poweredBy: integer('powered_by', { mode: 'boolean' }).notNull().default(true),
   systemPrompt: text('system_prompt').notNull().default(''),

@@ -1,0 +1,1 @@
+ALTER TABLE `chatbots` ADD `show_name` integer DEFAULT true NOT NULL;
