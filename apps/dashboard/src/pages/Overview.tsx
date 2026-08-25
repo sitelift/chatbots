@@ -120,7 +120,7 @@ export function Overview() {
             {bots !== null && (
               <button
                 type="button"
-                onClick={() => navigate({ to: '/chatbots', search: { new: '1' } })}
+                onClick={() => navigate({ to: '/chatbots/new' })}
                 className="mt-5 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 <Zap className="size-3.5" />

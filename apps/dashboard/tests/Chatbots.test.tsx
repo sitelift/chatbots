@@ -54,46 +54,14 @@ describe('ChatbotsPage', () => {
     expect(screen.getByText('paused')).toBeDefined()
   })
 
-  it('creates a chatbot through the form and shows it in the list', async () => {
-    const created = bot('ch_new', 'Nova Plumbing')
-    const fetchMock = stubApi([
-      { path: '/api/admin/chatbots', method: 'GET', status: 200, body: { chatbots: [] } },
-      { path: '/api/admin/chatbots', method: 'POST', status: 201, body: created },
-    ])
-    renderAtLocation('/chatbots')
-    fireEvent.click(await screen.findByText('New chatbot'))
-    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Nova Plumbing' } })
-    fireEvent.click(screen.getByText('Create chatbot'))
-
-    await waitFor(() => {
-      expect(screen.getByText('Nova Plumbing')).toBeDefined()
-    })
-
-    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
-    expect(postCall?.[0]).toBe('/api/admin/chatbots')
-    expect(JSON.parse(String(postCall?.[1]?.body)).name).toBe('Nova Plumbing')
-  })
-
-  it('rejects an invalid create client-side via the shared contract', async () => {
-    const fetchMock = stubApi([
-      { path: '/api/admin/chatbots', method: 'GET', status: 200, body: { chatbots: [] } },
-    ])
-    renderAtLocation('/chatbots')
-
-    fireEvent.click(await screen.findByText('New chatbot'))
-    fireEvent.click(screen.getByText('Create chatbot'))
-
-    await waitFor(() => {
-      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
-    })
-  })
-
-  it('opens the create form directly from the ?new=1 deep link', async () => {
+  it('navigates to the setup wizard from the New chatbot button', async () => {
     stubApi([{ path: '/api/admin/chatbots', method: 'GET', status: 200, body: { chatbots: [] } }])
     const rr = renderAtLocation('/chatbots')
-    await screen.findByText('No chatbots yet')
-    await rr.rawRouter.navigate({ to: '/chatbots', search: { new: '1' } })
-    expect(await screen.findByLabelText('Name')).toBeDefined()
+
+    fireEvent.click(await screen.findByText('New chatbot'))
+    await waitFor(() => {
+      expect(rr.currentPath()).toBe('/chatbots/new')
+    })
   })
 
   it('navigates to the editor when a row is clicked', async () => {

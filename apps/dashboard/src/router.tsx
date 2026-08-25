@@ -15,6 +15,7 @@ import type { AppUser } from './lib/auth-client'
 import { ChatbotEditor } from './pages/ChatbotEditor'
 import { ChatbotsPage } from './pages/Chatbots'
 import { LoginPage } from './pages/Login'
+import { NewChatbotPage } from './pages/NewChatbot'
 import { Overview } from './pages/Overview'
 import { SettingsPage } from './pages/Settings'
 
@@ -95,10 +96,13 @@ export function buildRouteTree(options?: { authGuard?: boolean }) {
   const chatbotsRoute = createRoute({
     getParentRoute: () => layoutRoute,
     path: '/chatbots',
-    validateSearch: (search: Record<string, unknown>) => ({
-      new: search.new === '1' ? ('1' as const) : undefined,
-    }),
     component: ChatbotsPage,
+  })
+
+  const newChatbotRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: '/chatbots/new',
+    component: NewChatbotPage,
   })
 
   const chatbotEditRoute = createRoute({
@@ -115,7 +119,13 @@ export function buildRouteTree(options?: { authGuard?: boolean }) {
 
   return rootRoute.addChildren([
     loginRoute,
-    layoutRoute.addChildren([indexRoute, chatbotsRoute, chatbotEditRoute, settingsRoute]),
+    layoutRoute.addChildren([
+      indexRoute,
+      chatbotsRoute,
+      newChatbotRoute,
+      chatbotEditRoute,
+      settingsRoute,
+    ]),
   ])
 }
 

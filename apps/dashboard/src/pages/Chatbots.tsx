@@ -1,181 +1,16 @@
-import { type ChatbotAdminView, chatbotInputSchema } from '@sitelift/shared'
-import { useNavigate, useSearch } from '@tanstack/react-router'
+import type { ChatbotAdminView } from '@sitelift/shared'
+import { useNavigate } from '@tanstack/react-router'
 import { Bot, LoaderCircle, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { ColorField } from '../components/ColorField'
 import { StatusBadge } from '../components/StatusBadge'
 import { type AdminApiError, apiFetch } from '../lib/api'
-import { inputClass, labelClass } from '../lib/ui'
-
-interface CreateFormProps {
-  busy: boolean
-  onCancel: () => void
-  onCreated: (view: ChatbotAdminView) => void
-  onError: (message: string) => void
-}
-
-export function CreateForm({ busy, onCancel, onCreated, onError }: CreateFormProps) {
-  const [name, setName] = useState('')
-  const [websiteUrl, setWebsiteUrl] = useState('')
-  const [welcomeMessage, setWelcomeMessage] = useState('')
-  const [brandColor, setBrandColor] = useState('#18181b')
-  const [domains, setDomains] = useState('')
-  const [systemPrompt, setSystemPrompt] = useState('')
-  const [validationError, setValidationError] = useState('')
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    setValidationError('')
-    const payload = {
-      name,
-      websiteUrl,
-      welcomeMessage: welcomeMessage || undefined,
-      brandColor,
-      allowedDomains: domains
-        .split(',')
-        .map((d) => d.trim())
-        .filter(Boolean),
-      systemPrompt: systemPrompt || undefined,
-    }
-    const parsed = chatbotInputSchema.safeParse(payload)
-    if (!parsed.success) {
-      setValidationError(parsed.error.issues[0]?.message ?? 'Invalid input')
-      return
-    }
-    try {
-      const view = await apiFetch<ChatbotAdminView>('/api/admin/chatbots', {
-        method: 'POST',
-        body: JSON.stringify(parsed.data),
-      })
-      onCreated(view)
-    } catch (err) {
-      const api = (err as Error & { api?: AdminApiError }).api
-      onError(api?.message ?? 'Failed to create chatbot')
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-5 border-b bg-muted/30 px-5 py-5">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="bot-name" className={labelClass}>
-            Name
-          </label>
-          <input
-            id="bot-name"
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Acme HVAC"
-            className={`${inputClass} mt-1.5`}
-          />
-        </div>
-        <div>
-          <label htmlFor="bot-url" className={labelClass}>
-            Website URL <span className="font-normal text-muted-foreground">· optional</span>
-          </label>
-          <input
-            id="bot-url"
-            type="url"
-            value={websiteUrl}
-            onChange={(e) => setWebsiteUrl(e.target.value)}
-            placeholder="https://acme.com"
-            className={`${inputClass} mt-1.5`}
-          />
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="bot-welcome" className={labelClass}>
-          Welcome message <span className="font-normal text-muted-foreground">· optional</span>
-        </label>
-        <input
-          id="bot-welcome"
-          type="text"
-          value={welcomeMessage}
-          onChange={(e) => setWelcomeMessage(e.target.value)}
-          placeholder="Hi! How can I help?"
-          className={`${inputClass} mt-1.5`}
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
-        <div>
-          <span className={labelClass}>Brand color</span>
-          <div className="mt-1.5">
-            <ColorField value={brandColor} onChange={setBrandColor} />
-          </div>
-        </div>
-        <div>
-          <label htmlFor="bot-domains" className={labelClass}>
-            Allowed domains{' '}
-            <span className="font-normal text-muted-foreground">· comma separated</span>
-          </label>
-          <input
-            id="bot-domains"
-            type="text"
-            value={domains}
-            onChange={(e) => setDomains(e.target.value)}
-            placeholder="acme.com, www.acme.com"
-            className={`${inputClass} mt-1.5 font-mono`}
-          />
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="bot-prompt" className={labelClass}>
-          Business facts{' '}
-          <span className="font-normal text-muted-foreground">· the system prompt</span>
-        </label>
-        <textarea
-          id="bot-prompt"
-          rows={4}
-          value={systemPrompt}
-          onChange={(e) => setSystemPrompt(e.target.value)}
-          placeholder={
-            'Family-owned HVAC company in Austin.\nHours: Mon–Fri 8am–6pm.\nEmergency line: (512) 555-0100.'
-          }
-          className={`${inputClass} mt-1.5 resize-y leading-relaxed`}
-        />
-      </div>
-
-      {validationError && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {validationError}
-        </p>
-      )}
-
-      <div className="flex justify-end gap-2 border-t pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border px-3 py-2 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
-        >
-          {busy && <LoaderCircle className="size-3.5 animate-spin" />}
-          Create chatbot
-        </button>
-      </div>
-    </form>
-  )
-}
 
 export function ChatbotsPage() {
   const navigate = useNavigate()
-  const { new: newIntent } = useSearch({ strict: false }) as { new?: '1' }
-  const creating = newIntent === '1'
   const [bots, setBots] = useState<ChatbotAdminView[] | null>(null)
   const [error, setError] = useState('')
-  const [creatingBusy, setCreatingBusy] = useState(false)
-  const [armedDeleteId, setArmedDeleteId] = useState<string | null>(null)
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
+  const [armedDeleteId, setArmedDeleteId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError('')
@@ -232,11 +67,6 @@ export function ChatbotsPage() {
     }
   }
 
-  function replaceWithCreated(view: ChatbotAdminView) {
-    setBots((list) => [view, ...(list ?? [])])
-    navigate({ to: '/chatbots', search: {}, replace: true })
-  }
-
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-10">
       <h1 className="text-3xl font-semibold tracking-tight">Chatbots</h1>
@@ -255,29 +85,15 @@ export function ChatbotsPage() {
               </span>
             )}
           </div>
-          {!creating && (
-            <button
-              type="button"
-              onClick={() => navigate({ to: '/chatbots', search: { new: '1' } })}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <Plus className="size-3.5" />
-              New chatbot
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => navigate({ to: '/chatbots/new' })}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <Plus className="size-3.5" />
+            New chatbot
+          </button>
         </div>
-
-        {creating && (
-          <CreateForm
-            busy={creatingBusy}
-            onCancel={() => navigate({ to: '/chatbots', search: {}, replace: true })}
-            onError={(m) => {
-              setError(m)
-              setCreatingBusy(false)
-            }}
-            onCreated={replaceWithCreated}
-          />
-        )}
 
         {error && (
           <p className="mx-5 mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -307,16 +123,14 @@ export function ChatbotsPage() {
               Create your first chatbot, paste one script tag on your client's site, and start
               capturing leads today.
             </p>
-            {!creating && (
-              <button
-                type="button"
-                onClick={() => navigate({ to: '/chatbots', search: { new: '1' } })}
-                className="mt-5 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              >
-                <Plus className="size-3.5" />
-                Create chatbot
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => navigate({ to: '/chatbots/new' })}
+              className="mt-5 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <Plus className="size-3.5" />
+              Create chatbot
+            </button>
           </div>
         ) : (
           <ul className="divide-y">
