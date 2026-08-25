@@ -42,7 +42,7 @@ describe('NewChatbot wizard', () => {
     stubApi([])
     renderAtLocation('/chatbots/new')
 
-    expect(await screen.findByText('Create a chatbot')).toBeDefined()
+    expect(await screen.findByRole('heading', { name: /bot for/ })).toBeDefined()
     expect(await screen.findByLabelText(/Name/)).toBeDefined()
   })
 

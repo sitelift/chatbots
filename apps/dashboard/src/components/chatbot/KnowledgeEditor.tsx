@@ -84,12 +84,14 @@ export function KnowledgeEditor({
   preview,
   showGreeting = true,
   keepImportVisible = false,
+  aside = true,
 }: {
   form: FormState
   set: FormSetter
   preview: string
   showGreeting?: boolean
   keepImportVisible?: boolean
+  aside?: boolean
 }) {
   const [importUrl, setImportUrl] = useState('')
   const [importing, setImporting] = useState(false)
@@ -189,7 +191,7 @@ export function KnowledgeEditor({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div className={aside ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]' : ''}>
       <div className="min-w-0 space-y-5">
         {!hasFacts || keepImportVisible ? (
           <section className="rounded-xl border bg-card p-5 shadow-sm">
@@ -392,69 +394,75 @@ export function KnowledgeEditor({
         )}
       </div>
 
-      <div className="min-w-0 space-y-5 lg:sticky lg:top-0 lg:self-start">
-        <section className="rounded-xl border bg-card p-5 shadow-sm">
-          <h2 className="text-base font-medium">Visitors will ask</h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            {coveredCount === FACT_FIELDS.length
-              ? 'Everything covered. Nice.'
-              : `${coveredCount} of ${FACT_FIELDS.length} covered — add the rest so it never blanks.`}
-          </p>
-          <ul className="mt-3 space-y-1">
-            {FACT_FIELDS.map((field) => {
-              const filled = (facts[field.key] ?? '').trim() !== ''
-              return (
-                <li key={field.key}>
-                  <button
-                    type="button"
-                    onClick={() => focusFact(field.key)}
-                    title={filled ? `Edit “${field.label}”` : `Add “${field.label}”`}
-                    className="-mx-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] transition-colors duration-150 hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  >
-                    <span
-                      className={`grid size-4 shrink-0 place-items-center rounded-full ${
-                        filled ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground/60'
-                      }`}
+      {aside && (
+        <div className="min-w-0 space-y-5 lg:sticky lg:top-0 lg:self-start">
+          <section className="rounded-xl border bg-card p-5 shadow-sm">
+            <h2 className="text-base font-medium">Visitors will ask</h2>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+              {coveredCount === FACT_FIELDS.length
+                ? 'Everything covered. Nice.'
+                : `${coveredCount} of ${FACT_FIELDS.length} covered — add the rest so it never blanks.`}
+            </p>
+            <ul className="mt-3 space-y-1">
+              {FACT_FIELDS.map((field) => {
+                const filled = (facts[field.key] ?? '').trim() !== ''
+                return (
+                  <li key={field.key}>
+                    <button
+                      type="button"
+                      onClick={() => focusFact(field.key)}
+                      title={filled ? `Edit “${field.label}”` : `Add “${field.label}”`}
+                      className="-mx-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[13px] transition-colors duration-150 hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     >
-                      {filled ? (
-                        <Check className="size-3" />
-                      ) : (
-                        <span className="size-1 rounded-full bg-current" />
-                      )}
-                    </span>
-                    <span className={filled ? '' : 'text-muted-foreground'}>{field.question}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </section>
+                      <span
+                        className={`grid size-4 shrink-0 place-items-center rounded-full ${
+                          filled
+                            ? 'bg-success/15 text-success'
+                            : 'bg-muted text-muted-foreground/60'
+                        }`}
+                      >
+                        {filled ? (
+                          <Check className="size-3" />
+                        ) : (
+                          <span className="size-1 rounded-full bg-current" />
+                        )}
+                      </span>
+                      <span className={filled ? '' : 'text-muted-foreground'}>
+                        {field.question}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
 
-        <section className="rounded-xl border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-medium">Final prompt</h2>
-            <button
-              type="button"
-              onClick={() => void copyPreview()}
-              disabled={!preview}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
-            >
-              {previewCopied ? (
-                <Check className="size-3 text-success" />
-              ) : (
-                <Copy className="size-3" />
-              )}
-              {previewCopied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            Exactly what the bot reads each message — facts as JSON, live.
-          </p>
-          <pre className="mt-3 max-h-[480px] overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-            {preview || 'Fill in any field to see the assembled prompt.'}
-          </pre>
-        </section>
-      </div>
+          <section className="rounded-xl border bg-card p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-medium">Final prompt</h2>
+              <button
+                type="button"
+                onClick={() => void copyPreview()}
+                disabled={!preview}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
+              >
+                {previewCopied ? (
+                  <Check className="size-3 text-success" />
+                ) : (
+                  <Copy className="size-3" />
+                )}
+                {previewCopied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+              Exactly what the bot reads each message — facts as JSON, live.
+            </p>
+            <pre className="mt-3 max-h-[480px] overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+              {preview || 'Fill in any field to see the assembled prompt.'}
+            </pre>
+          </section>
+        </div>
+      )}
     </div>
   )
 }
