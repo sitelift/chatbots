@@ -6,6 +6,19 @@ interface SessionValue {
   status: 'loading' | 'ready'
 }
 
+let inflightMe: Promise<AppUser | null> | null = null
+
+export function fetchMe(): Promise<AppUser | null> {
+  inflightMe ??= fetch('/api/auth/me').then(async (res) =>
+    res.ok ? ((await res.json()) as AppUser) : null,
+  )
+  return inflightMe
+}
+
+export function resetSessionCache(): void {
+  inflightMe = null
+}
+
 const SessionContext = createContext<SessionValue>({ user: null, status: 'loading' })
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -13,8 +26,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/auth/me')
-      .then(async (res) => (res.ok ? ((await res.json()) as AppUser) : null))
+    fetchMe()
       .then((u) => {
         if (!cancelled) setState({ user: u, status: 'ready' })
       })

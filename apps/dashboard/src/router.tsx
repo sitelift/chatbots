@@ -12,7 +12,7 @@ import {
 import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Topbar } from './components/Topbar'
-import { SessionProvider, useSession } from './lib/session'
+import { fetchMe, SessionProvider, useSession } from './lib/session'
 import { AcceptInvitePage } from './pages/AcceptInvite'
 import { ChatbotEditor } from './pages/ChatbotEditor'
 import { ChatbotsPage } from './pages/Chatbots'
@@ -98,8 +98,8 @@ export function buildRouteTree(options?: { authGuard?: boolean }) {
     id: 'layout',
     beforeLoad: async () => {
       if (!guardEnabled) return
-      const res = await fetch('/api/auth/me')
-      if (!res.ok) throw redirect({ to: '/login' })
+      const me = await fetchMe()
+      if (!me) throw redirect({ to: '/login' })
     },
     component: () => (
       <Shell>

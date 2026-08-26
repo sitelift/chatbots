@@ -1,6 +1,6 @@
 import { Moon, Sun } from 'lucide-react'
 import { authClient } from '../lib/auth-client'
-import { useSession } from '../lib/session'
+import { resetSessionCache, useSession } from '../lib/session'
 
 interface TopbarProps {
   dark: boolean
@@ -12,6 +12,7 @@ export function Topbar({ dark, onToggleTheme }: TopbarProps) {
 
   async function signOut() {
     await authClient.signOut()
+    resetSessionCache()
     window.location.reload()
   }
 

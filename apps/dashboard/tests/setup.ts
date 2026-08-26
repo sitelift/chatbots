@@ -1,9 +1,11 @@
 import { cleanup } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
+import { resetSessionCache } from '../src/lib/session'
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  resetSessionCache()
 })
 
 // jsdom does not implement matchMedia; Shell uses it for theme init.

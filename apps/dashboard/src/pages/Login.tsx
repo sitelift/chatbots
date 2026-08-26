@@ -3,6 +3,7 @@ import { CircleAlert, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Logo } from '../components/Logo'
 import { authClient } from '../lib/auth-client'
+import { fetchMe, resetSessionCache } from '../lib/session'
 import { inputClass, inputInvalidClass, labelClass } from '../lib/ui'
 
 type Mode = 'signin' | 'signup'
@@ -193,9 +194,7 @@ export function LoginPage() {
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      fetch('/api/auth/me').then(async (res) =>
-        res.ok ? ((await res.json()) as { id: string }) : null,
-      ),
+      fetchMe(),
       fetch('/api/auth/bootstrap').then(async (res) =>
         res.ok ? ((await res.json()) as { hasUsers: boolean }) : null,
       ),
@@ -243,7 +242,10 @@ export function LoginPage() {
       if (mode === 'signin') {
         const result = await authClient.signIn.email({ email: email.trim(), password })
         if (result.error) setError(result.error.message ?? 'Sign-in failed')
-        else navigate({ to: '/' })
+        else {
+          resetSessionCache()
+          navigate({ to: '/' })
+        }
       } else {
         const result = await authClient.signUp.email({
           email: email.trim(),
@@ -251,7 +253,10 @@ export function LoginPage() {
           name: name.trim() || email.split('@')[0] || 'New user',
         })
         if (result.error) setError(result.error.message ?? 'Sign-up failed')
-        else navigate({ to: '/' })
+        else {
+          resetSessionCache()
+          navigate({ to: '/' })
+        }
       }
     } catch {
       setError('Could not reach the server')
