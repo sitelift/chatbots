@@ -132,6 +132,44 @@ describe('NewChatbot wizard', () => {
     expect(body.facts.overview).toBe('Plumbing in Austin.')
   })
 
+  it('lets you type a hex brand color on the Look & greet step', async () => {
+    const fetchMock = stubApi([
+      { path: '/api/admin/chatbots', method: 'POST', status: 201, body: createdBot() },
+    ])
+    renderAtLocation('/chatbots/new')
+
+    fireEvent.change(await screen.findByLabelText(/Name/), {
+      target: { value: 'Nova Plumbing' },
+    })
+    fireEvent.click(screen.getByText('Continue'))
+    await screen.findByText('Import a website')
+    fireEvent.click(screen.getByText('Continue'))
+
+    const hexInput = (await screen.findByLabelText('Brand color hex')) as HTMLInputElement
+
+    fireEvent.change(hexInput, { target: { value: '#' } })
+    expect(hexInput.value).toBe('#')
+    fireEvent.change(hexInput, { target: { value: '#ff' } })
+    expect(hexInput.value).toBe('#FF')
+    fireEvent.change(hexInput, { target: { value: '#ff0000' } })
+    expect(hexInput.value).toBe('#FF0000')
+
+    fireEvent.change(hexInput, { target: { value: '' } })
+    expect(hexInput.value).toBe('')
+    fireEvent.blur(hexInput)
+    expect(hexInput.value).toBe('#FF0000')
+
+    fireEvent.click(screen.getByText('Continue'))
+    fireEvent.click(screen.getByText('Create chatbot'))
+
+    await waitFor(() => {
+      const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
+      expect(postCall).toBeDefined()
+    })
+    const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
+    expect(JSON.parse(String(postCall?.[1]?.body)).brandColor).toBe('#ff0000')
+  })
+
   it('sends the chosen status in the create payload', async () => {
     const fetchMock = stubApi([
       { path: '/api/admin/chatbots', method: 'POST', status: 201, body: createdBot() },

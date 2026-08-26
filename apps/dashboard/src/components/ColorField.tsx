@@ -14,10 +14,72 @@ const PRESETS = [
   '#9333ea',
 ]
 
+const FALLBACK_HEX = '#18181b'
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
+const PARTIAL_RE = /^#?[0-9a-fA-F]{0,6}$/
+
 interface Hsv {
   h: number
   s: number
   v: number
+}
+
+function normalizeHex(raw: string): string | null {
+  const body = raw.replace(/^#/, '')
+  return /^[0-9a-fA-F]{6}$/.test(body) ? `#${body.toLowerCase()}` : null
+}
+
+function HexInput({
+  value,
+  onChange,
+  className,
+  ariaLabel,
+}: {
+  value: string
+  onChange: (hex: string) => void
+  className: string
+  ariaLabel?: string
+}) {
+  const [focused, setFocused] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const lastValidRef = useRef(HEX_RE.test(value) ? value : FALLBACK_HEX)
+
+  useEffect(() => {
+    if (HEX_RE.test(value)) lastValidRef.current = value
+  }, [value])
+
+  useEffect(() => {
+    if (!focused) setDraft(value)
+  }, [value, focused])
+
+  function handleChange(raw: string) {
+    if (!PARTIAL_RE.test(raw)) return
+    setDraft(raw)
+    const normalized = normalizeHex(raw)
+    if (normalized) onChange(normalized)
+  }
+
+  function handleBlur() {
+    setFocused(false)
+    if (!normalizeHex(draft)) setDraft(lastValidRef.current)
+  }
+
+  return (
+    <input
+      type="text"
+      aria-label={ariaLabel}
+      value={draft.toUpperCase()}
+      onChange={(e) => handleChange(e.target.value.trim())}
+      onFocus={() => {
+        setFocused(true)
+        setDraft(value)
+      }}
+      onBlur={handleBlur}
+      maxLength={7}
+      spellCheck={false}
+      className={className}
+    />
+  )
 }
 
 function clamp01(n: number): number {
@@ -135,22 +197,10 @@ export function ColorField({ value, onChange }: ColorFieldProps) {
           className="size-5 shrink-0 rounded-[5px] border border-black/15 dark:border-white/25"
           style={{ backgroundColor: value }}
         />
-        <input
-          type="text"
-          aria-label="Brand color hex"
-          value={value.toUpperCase()}
-          onChange={(e) => {
-            const raw = e.target.value.trim()
-            if (/^#?[0-9a-fA-F]{1,6}$/.test(raw)) {
-              onChange(raw.startsWith('#') ? raw.toLowerCase() : `#${raw.toLowerCase()}`)
-            }
-          }}
-          onBlur={(e) => {
-            const raw = e.target.value.trim()
-            if (!/^#?[0-9a-fA-F]{6}$/.test(raw)) onChange(value)
-          }}
-          maxLength={7}
-          spellCheck={false}
+        <HexInput
+          value={value}
+          onChange={onChange}
+          ariaLabel="Brand color hex"
           className="flex-1 bg-transparent font-mono text-xs uppercase tracking-wide outline-none"
         />
         <button
@@ -226,22 +276,17 @@ export function ColorField({ value, onChange }: ColorFieldProps) {
             </div>
           </div>
 
-          <label className="mt-3 block">
+          <div className="mt-3">
             <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Hex
             </span>
-            <input
-              type="text"
-              value={value.toUpperCase()}
-              onChange={(e) => {
-                const raw = e.target.value.trim()
-                if (/^#?[0-9a-fA-F]{6}$/.test(raw)) onChange(raw.startsWith('#') ? raw : `#${raw}`)
-              }}
-              maxLength={7}
-              spellCheck={false}
+            <HexInput
+              value={value}
+              onChange={onChange}
+              ariaLabel="Hex"
               className="mt-1 h-8 w-full rounded-md border border-input bg-muted/30 px-2.5 font-mono text-xs uppercase outline-none transition-colors duration-150 focus-visible:border-ring focus-visible:bg-background"
             />
-          </label>
+          </div>
         </div>
       )}
     </div>
