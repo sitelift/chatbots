@@ -330,6 +330,7 @@ seeded — fresh installs start with a blank chatbot list.
 ## Commit trail (this rebuild)
 
 ```
+<uncommitted> fix: shared ColorField hex typing — wizard + settings both render the same `ColorField`, but its hex input rejected the leading `#` and could never be cleared, so typing a hex code never stuck; extracted a shared `HexInput` (inline + popover) that accepts `#` first, commits once 6 digits are typed, can be cleared, and reverts to the last valid color on blur; wizard test types `#ff0000` through to the create payload
 <uncommitted> fix: wizard "Invalid URL" dead-end — zod v4 `z.string().url()` rejects scheme-less URLs (`acme.com`) in `chatbotInputSchema.websiteUrl/avatarUrl`, so create always failed with "Invalid URL" and the banner never cleared; shared schema now normalizes via `urlOrEmptySchema` (prepend `https://`, like the import schema)
 <uncommitted> feat: provider pin (OpenRouter only) — `provider: {only:[slug]}` routing, Settings field hidden unless OpenRouter, settings storage + tests
 <uncommitted> perf: import — disable reasoning traces on extraction (`reasoning: {effort: none}`, goldilocks short prompt, no max-tokens cap) + empty-result guard throws EXTRACTION_FAILED instead of blank draft; provider request body builder
