@@ -145,7 +145,10 @@ export function ChatbotsPage() {
         ) : (
           <ul className="divide-y">
             {bots.map((bot) => (
-              <li key={bot.id} className="list-none">
+              <li
+                key={bot.id}
+                className="flex w-full cursor-pointer flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3.5 transition-colors duration-150 hover:bg-muted/40"
+              >
                 <button
                   type="button"
                   aria-label={`Edit ${bot.name}`}
@@ -155,14 +158,14 @@ export function ChatbotsPage() {
                       params: { botId: bot.id },
                     })
                   }}
-                  className="flex w-full cursor-pointer flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3.5 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                  className="flex min-w-0 flex-1 basis-48 flex-wrap items-center gap-x-6 gap-y-2 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                 >
-                  <div className="min-w-0 flex-1 basis-48">
-                    <p className="truncate text-sm font-medium">{bot.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                  <span className="min-w-0 flex-1 basis-40">
+                    <span className="block truncate text-sm font-medium">{bot.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
                       {bot.websiteUrl ?? 'No website set'}
-                    </p>
-                  </div>
+                    </span>
+                  </span>
                   <StatusBadge status={bot.status} />
                   {agencyControls && (
                     <>
@@ -178,53 +181,49 @@ export function ChatbotsPage() {
                       </span>
                     </>
                   )}
-                  {agencyControls && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={rowBusyId === bot.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void toggleStatus(bot)
-                        }}
-                        aria-label={
-                          bot.status === 'active' ? `Pause ${bot.name}` : `Activate ${bot.name}`
-                        }
-                        title={bot.status === 'active' ? 'Pause — stops token spend' : 'Activate'}
-                        className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
-                      >
-                        {rowBusyId === bot.id ? (
-                          <LoaderCircle className="size-3.5 animate-spin" />
-                        ) : bot.status === 'active' ? (
-                          <Pause className="size-3.5" />
-                        ) : (
-                          <Play className="size-3.5" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={rowBusyId === bot.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void remove(bot.id)
-                        }}
-                        aria-label={
-                          armedDeleteId === bot.id
-                            ? `Confirm delete ${bot.name}`
-                            : `Delete ${bot.name}`
-                        }
-                        className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40 ${
-                          armedDeleteId === bot.id
-                            ? 'bg-destructive text-white hover:opacity-90'
-                            : 'text-muted-foreground hover:bg-muted hover:text-destructive'
-                        }`}
-                      >
-                        <Trash2 className="size-3.5" />
-                        {armedDeleteId === bot.id ? 'Confirm?' : 'Delete'}
-                      </button>
-                    </div>
-                  )}
                 </button>
+                {agencyControls && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={rowBusyId === bot.id}
+                      onClick={() => {
+                        void toggleStatus(bot)
+                      }}
+                      aria-label={
+                        bot.status === 'active' ? `Pause ${bot.name}` : `Activate ${bot.name}`
+                      }
+                      title={bot.status === 'active' ? 'Pause — stops token spend' : 'Activate'}
+                      className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
+                    >
+                      {rowBusyId === bot.id ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : bot.status === 'active' ? (
+                        <Pause className="size-3.5" />
+                      ) : (
+                        <Play className="size-3.5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={rowBusyId === bot.id}
+                      onClick={() => {
+                        void remove(bot.id)
+                      }}
+                      aria-label={
+                        armedDeleteId === bot.id ? `Confirm delete ${bot.name}` : `Delete ${bot.name}`
+                      }
+                      className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40 ${
+                        armedDeleteId === bot.id
+                          ? 'bg-destructive text-white hover:opacity-90'
+                          : 'text-muted-foreground hover:bg-muted hover:text-destructive'
+                      }`}
+                    >
+                      <Trash2 className="size-3.5" />
+                      {armedDeleteId === bot.id ? 'Confirm?' : 'Delete'}
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
