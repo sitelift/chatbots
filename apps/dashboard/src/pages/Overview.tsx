@@ -1,37 +1,55 @@
-import { type ChatbotAdminView, chatbotStatusLabels } from '@sitelift/shared'
+import { type ChatbotAdminView, chatbotStatusLabels, type DashboardStats } from '@sitelift/shared'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Bot, MessageSquare, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../lib/api'
 import { useSession } from '../lib/session'
 
+const EMPTY_STATS: DashboardStats = {
+  chatbotsTotal: 0,
+  chatbotsActive: 0,
+  conversations: 0,
+  leads: 0,
+  messages: 0,
+}
+
 export function Overview() {
   const navigate = useNavigate({ from: '/' })
   const { user } = useSession()
   const agencyControls = !user || user.role === 'agency'
   const [bots, setBots] = useState<ChatbotAdminView[] | null>(null)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    apiFetch<{ chatbots: ChatbotAdminView[] }>('/api/admin/chatbots')
+    const chatbotsReq = apiFetch<{ chatbots: ChatbotAdminView[] }>('/api/admin/chatbots')
+    const statsReq = apiFetch<DashboardStats>('/api/admin/stats')
+    chatbotsReq
       .then((data) => {
         if (!cancelled) setBots(data.chatbots)
       })
       .catch(() => {
         if (!cancelled) setBots([])
       })
+    statsReq
+      .then((data) => {
+        if (!cancelled) setStats(data)
+      })
+      .catch(() => {
+        if (!cancelled) setStats(EMPTY_STATS)
+      })
     return () => {
       cancelled = true
     }
   }, [])
 
-  const total = bots?.length ?? 0
-  const active = bots?.filter((b) => b.status === 'active').length ?? 0
+  const total = stats?.chatbotsTotal ?? 0
+  const active = stats?.chatbotsActive ?? 0
 
-  const stats = [
+  const statsCards = [
     {
       label: 'Chatbots',
-      value: bots === null ? '…' : String(total),
+      value: stats === null ? '…' : String(total),
       hint:
         total === 0
           ? agencyControls
@@ -41,13 +59,19 @@ export function Overview() {
     },
     {
       label: 'Conversations',
-      value: '0',
-      hint: 'Visitor threads appear here once your widget is live',
+      value: stats === null ? '…' : String(stats.conversations),
+      hint:
+        stats !== null && stats.conversations > 0
+          ? 'Visitor threads captured across your live widgets'
+          : 'Visitor threads appear here once your widget is live',
     },
     {
       label: 'Leads captured',
-      value: '0',
-      hint: 'Name + email captured by the AI land in this count',
+      value: stats === null ? '…' : String(stats.leads),
+      hint:
+        stats !== null && stats.leads > 0
+          ? 'Name + email shared by visitors, ready for follow-up'
+          : 'Name + email captured by the AI land in this count',
     },
   ]
 
@@ -59,7 +83,7 @@ export function Overview() {
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        {stats.map(({ label, value, hint }) => (
+        {statsCards.map(({ label, value, hint }) => (
           <div
             key={label}
             className="rounded-lg border bg-card p-5 transition-colors duration-150 hover:bg-muted/40"
@@ -93,7 +117,8 @@ export function Overview() {
               <li key={b.id}>
                 <button
                   type="button"
-                  onClick={() => navigate({ to: '/chatbots' })}
+                  aria-label={`Open ${b.name}`}
+                  onClick={() => navigate({ to: '/chatbots/$botId', params: { botId: b.id } })}
                   className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors duration-150 hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                 >
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{b.name}</span>

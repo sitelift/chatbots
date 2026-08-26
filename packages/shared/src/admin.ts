@@ -164,3 +164,13 @@ export const ADMIN_ROUTES = {
   clients: '/api/admin/clients',
   settings: '/api/admin/settings',
 } as const
+
+export const dashboardStatsSchema = z.object({
+  chatbotsTotal: z.number().int().nonnegative(),
+  chatbotsActive: z.number().int().nonnegative(),
+  conversations: z.number().int().nonnegative(),
+  leads: z.number().int().nonnegative(),
+  messages: z.number().int().nonnegative(),
+})
+
+export type DashboardStats = z.infer<typeof dashboardStatsSchema>

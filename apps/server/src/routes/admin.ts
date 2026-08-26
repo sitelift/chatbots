@@ -137,6 +137,54 @@ adminRoutes.get('/chatbots', async (c) => {
   return c.json({ chatbots: sorted.map(toView) })
 })
 
+adminRoutes.get('/stats', async (c) => {
+  const user = c.get('user')
+  let rows = await db.query.chatbots.findMany()
+  if (user && user.role !== 'agency') {
+    const ids = await assignedChatbotIds(user.id)
+    rows = rows.filter((r) => ids.includes(r.id))
+  }
+
+  const botIds = rows.map((r) => r.id)
+
+  if (botIds.length === 0) {
+    return c.json({
+      chatbotsTotal: 0,
+      chatbotsActive: 0,
+      conversations: 0,
+      leads: 0,
+      messages: 0,
+    })
+  }
+
+  const convs = db
+    .select({
+      id: conversations.id,
+      visitorName: conversations.visitorName,
+      visitorEmail: conversations.visitorEmail,
+    })
+    .from(conversations)
+    .where(inArray(conversations.chatbotId, botIds))
+    .all()
+
+  const convIds = convs.map((cv) => cv.id)
+  const messageRows = convIds.length
+    ? db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(inArray(messages.conversationId, convIds))
+        .all()
+    : []
+
+  return c.json({
+    chatbotsTotal: rows.length,
+    chatbotsActive: rows.filter((r) => r.status === 'active').length,
+    conversations: convs.length,
+    leads: convs.filter((cv) => cv.visitorName || cv.visitorEmail).length,
+    messages: messageRows.length,
+  })
+})
+
 adminRoutes.post('/chatbots', requireRole('agency'), async (c) => {
   const parsed = chatbotInputSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) {

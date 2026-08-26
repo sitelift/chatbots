@@ -252,3 +252,59 @@ describe('agency-only surfaces reject clients', () => {
     expect(importRes.status).toBe(403)
   })
 })
+
+describe('GET /api/admin/stats scoping', () => {
+  it('aggregates across every chatbot for the agency', async () => {
+    const res = await createApp().request('/api/admin/stats', {
+      headers: { Cookie: agency.cookie },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      chatbotsTotal: number
+      chatbotsActive: number
+      conversations: number
+      leads: number
+      messages: number
+    }
+    expect(body.chatbotsTotal).toBeGreaterThanOrEqual(2)
+    expect(body.chatbotsActive).toBeLessThanOrEqual(body.chatbotsTotal)
+    expect(body.conversations).toBeGreaterThanOrEqual(0)
+    expect(body.leads).toBeGreaterThanOrEqual(0)
+    expect(body.messages).toBeGreaterThanOrEqual(0)
+  })
+
+  it('counts only assigned bots for clients', async () => {
+    const res = await asClient('/api/admin/stats')
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      chatbotsTotal: number
+      conversations: number
+    }
+    expect(body.chatbotsTotal).toBe(1)
+  })
+
+  it('serves zeros for unassigned clients', async () => {
+    resetUsers()
+    await signUpUser('Reowner')
+    const loneClient = await signUpUser('Lone Client')
+
+    const res = await createApp().request('/api/admin/stats', {
+      headers: { Cookie: loneClient.cookie },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      chatbotsTotal: number
+      chatbotsActive: number
+      conversations: number
+      leads: number
+      messages: number
+    }
+    expect(body).toEqual({
+      chatbotsTotal: 0,
+      chatbotsActive: 0,
+      conversations: 0,
+      leads: 0,
+      messages: 0,
+    })
+  })
+})
