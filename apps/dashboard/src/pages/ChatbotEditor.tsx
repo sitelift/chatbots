@@ -35,6 +35,7 @@ import { WidgetSim } from '../components/chatbot/WidgetSim'
 import { Dialog } from '../components/Dialog'
 import { StatusBadge } from '../components/StatusBadge'
 import { type AdminApiError, apiFetch } from '../lib/api'
+import { relativeTime } from '../lib/reltime'
 import { useSession } from '../lib/session'
 import { inputClass, labelClass } from '../lib/ui'
 import { uid } from '../lib/uid'
@@ -503,11 +504,8 @@ function LeadsTab({ botId }: { botId: string }) {
                     )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="tnum text-xs text-muted-foreground">
-                      {new Date(lead.createdAt).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
+                    <p className="tnum text-xs text-muted-foreground" title={new Date(lead.createdAt).toLocaleString()}>
+                      {relativeTime(new Date(lead.createdAt))}
                     </p>
                     <p className="tnum mt-1 text-xs text-muted-foreground">
                       {lead.messageCount} messages
