@@ -3,11 +3,11 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** client-portal polish rounds 1–3 committed and pushed. Round 3: single
-> `/api/auth/me` round-trip per load (shared memoized `fetchMe()`), in-app discard confirmation
-> replacing native `window.confirm`, AcceptInvite page raised to login-page standard (shared auth
-> field components, strength meter, validation). Next up: keep refining the client journey,
-> then lead-capture emails.
+> **Last updated:** client-portal polish rounds 1–4 committed and pushed. Round 4: empty-domain
+> guardrails (DomainsList warning callout + active-bot status warning; note empty allowlist means
+> "answers from any website" server-side) and relative lead timestamps. Rounds 1–3 covered preview
+> banner fix, role-aware copy, live stats, a11y rows, session dedupe, discard dialog, invite flow.
+> Next up: keep refining, then lead-capture emails.
 
 ---
 
@@ -17,7 +17,7 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 126 passing (76 server · 50 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 134 passing (76 server · 58 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
@@ -341,6 +341,19 @@
   reset-password endpoint, validation gating blocks submit, mismatch message, server-rejected link.
 </details>
 
+<details>
+<summary><strong>Client portal polish round 4 — domain guardrails + inbox feel (DONE)</strong></summary>
+
+- **Empty-domain guardrails:** server behavior confirmed — an empty allowlist means the widget
+  answers from ANY origin (`originAllowed` returns true), so both surfaces warn instead of block:
+  `DomainsList` empty state is a warning callout (wizard + editor share it), and the editor's
+  Settings status picker shows "Live and open to any website" while status=active and no domain
+  has a value. Tests cover warn-clears-when-typed and paused-state silence.
+- **Relative lead timestamps:** new pure `lib/reltime.ts` (just now / Nm / Nh / yesterday / Nd /
+  short-date fallback, future-skew clamp) unit-tested; leads rows show relative time with full
+  datetime on hover via title attr.
+</details>
+
 ## Known gaps / tech debt (honest)
 
 <details>
@@ -418,6 +431,9 @@ seeded — fresh installs start with a blank chatbot list.
 ## Commit trail (this rebuild)
 
 ```
+166d238 style: biome formatting
+a8f92cc design: leads inbox reads like an inbox — relative timestamps (reltime.ts) with short-date fallback + hover datetime
+194a45b feat: empty-domain guardrails — DomainsList warning callout + active-bot status warning when no domains configured
 bdd2322 feat: accept-invite page reaches login-page standard — shared auth field components (fields.tsx), strength meter, keystroke-clearing errors, SPA hand-off
 f26ead8 design: in-app discard confirmation — Dialog replaces native window.confirm on dirty-editor back
 b7ec5bb perf: single /api/auth/me round-trip per load — memoized fetchMe() shared by guard/provider/login, invalidated on auth transitions
