@@ -330,6 +330,7 @@ seeded — fresh installs start with a blank chatbot list.
 ## Commit trail (this rebuild)
 
 ```
+<uncommitted> fix: wizard "Invalid URL" dead-end — zod v4 `z.string().url()` rejects scheme-less URLs (`acme.com`) in `chatbotInputSchema.websiteUrl/avatarUrl`, so create always failed with "Invalid URL" and the banner never cleared; shared schema now normalizes via `urlOrEmptySchema` (prepend `https://`, like the import schema)
 <uncommitted> feat: provider pin (OpenRouter only) — `provider: {only:[slug]}` routing, Settings field hidden unless OpenRouter, settings storage + tests
 <uncommitted> perf: import — disable reasoning traces on extraction (`reasoning: {effort: none}`, goldilocks short prompt, no max-tokens cap) + empty-result guard throws EXTRACTION_FAILED instead of blank draft; provider request body builder
 <uncommitted> perf: import — parallel sub-page crawl, extraction prompt 60k→30k chars, output cap 8000→4096, 120s provider abort, phase timing logs

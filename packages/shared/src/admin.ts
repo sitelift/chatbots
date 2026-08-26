@@ -4,12 +4,25 @@ import { businessFactsSchema } from './facts'
 
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/)
 
+export const urlOrEmptySchema = (message: string) =>
+  z
+    .string()
+    .trim()
+    .transform((value) =>
+      value === ''
+        ? value
+        : /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value)
+          ? value
+          : `https://${value}`,
+    )
+    .pipe(z.union([z.literal(''), z.string().url(message)]))
+
 export const chatbotInputSchema = z.object({
   name: z.string().min(1).max(80),
-  websiteUrl: z.union([z.string().url(), z.literal('')]).optional(),
+  websiteUrl: urlOrEmptySchema('Enter a valid website URL').optional(),
   welcomeMessage: z.string().min(1).max(300).optional(),
   brandColor: hexColorSchema.optional(),
-  avatarUrl: z.union([z.string().url(), z.literal('')]).nullish(),
+  avatarUrl: urlOrEmptySchema('Enter a valid website URL').nullish(),
   quickReplies: z.array(z.string().min(1).max(60)).max(6).optional(),
   showLogo: z.boolean().optional(),
   showName: z.boolean().optional(),
