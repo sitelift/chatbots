@@ -211,7 +211,9 @@ export function ChatbotsPage() {
                         void remove(bot.id)
                       }}
                       aria-label={
-                        armedDeleteId === bot.id ? `Confirm delete ${bot.name}` : `Delete ${bot.name}`
+                        armedDeleteId === bot.id
+                          ? `Confirm delete ${bot.name}`
+                          : `Delete ${bot.name}`
                       }
                       className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40 ${
                         armedDeleteId === bot.id

@@ -206,8 +206,8 @@ export function KnowledgeEditor({
                   Teach your chatbot{form.name.trim() ? ` about ${form.name.trim()}` : ''}
                 </h2>
                 <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-                  Visitors get answers built only from what is written here — the more it knows,
-                  the fewer questions it fumbles.
+                  Visitors get answers built only from what is written here — the more it knows, the
+                  fewer questions it fumbles.
                 </p>
                 <ul className="mt-3 space-y-1 text-[13px] leading-relaxed text-muted-foreground">
                   {canImport && (

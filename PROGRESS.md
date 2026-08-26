@@ -3,7 +3,12 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** no default model — per-bot override or global default in Settings, else a clear `MODEL_NOT_CONFIGURED` error (was hardcoded `gpt-4o-mini`).
+> **Last updated:** client-portal polish rounds 1–2 committed and pushed. Round 1: preview
+> banner no longer renders for real clients (`previewingOwner` split from `ownerView`),
+> agency-speak removed from every client surface, website import hidden where forbidden.
+> Round 2: live Overview counters via role-scoped `GET /api/admin/stats`, valid (non-nested)
+> a11y chatbot rows with deep-linked editors, fresh-bot knowledge orientation card. Next up:
+> keep refining the client journey, then lead-capture emails.
 
 ---
 
@@ -13,7 +18,7 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 78 passing (50 server · 28 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 118 passing (76 server · 42 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
@@ -249,6 +254,77 @@
 - **Provider pin (OpenRouter only):** optional Settings field — `provider: { only: [slug], allow_fallbacks: false }` routes every request to one specific OpenRouter upstream for consistent speed. Hidden unless OpenRouter base URL is selected. Verified working: `only` (not `order`) is the reliable field with `~`-prefixed model slugs; `sort: 'latency'` also works (~1.5s vs 11s on this model). Tests: 52 server tests pass.
 </details>
 
+<details>
+<summary><strong>Client-role ownership scoping (DONE — Phase 1 of portal work)</strong></summary>
+
+- `/api/admin/*` now accepts client sessions via `requireRole('agency','client')`; agency-only
+  surfaces (clients mgmt, settings, models, import, chatbot create/delete) stay 403-guarded.
+- **Ownership chain enforced in the query layer** (`hasBotAccess` / `assignedChatbotIds`):
+  clients see only assigned bots in `GET /chatbots`; `GET/PUT /chatbots/:id`, leads, stats and
+  the draft-facts test endpoint return **404 for unassigned bots** (no existence leak).
+- **Client PUT field allowlist:** welcomeMessage, quickReplies, brandColor, avatarUrl,
+  showLogo/showName/showOnlineStatus/poweredBy, facts. Agency-only fields (name, status,
+  model, domains, baseUrl, systemPrompt raw) are silently dropped from client payloads.
+- Fixed latent bug: partial PUTs without `facts` used to wipe `systemPrompt` to '' — the prompt
+  is now only recomputed when `facts` is present in the payload (null clears it).
+- Tests: `tests/scoping.test.ts` (13 tests) covers list/read/edit scoping, forbidden-field drops,
+  cross-tenant 404s, test/leads/stats access and agency-only 403s; auth role-guard test updated.
+</details>
+
+<details>
+<summary><strong>Clients management + owner portal (DONE)</strong></summary>
+
+- **Invite flow with zero password handling:** `POST /api/admin/clients` creates the user and
+  stores a better-auth reset-password-shaped token (`identifier: "reset-password:<token>",
+  value: userId`); the copyable setup link opens `/accept/<token>` which calls better-auth's own
+  public `POST /api/auth/reset-password {newPassword, token}`. Hashing, credential-account
+  upsert, single-use consumption — all native. Hand-rolled hashing was tried first and abandoned:
+  the exported `better-auth/crypto` hashPassword does NOT match what credential sign-in verifies.
+- Agency endpoints: create (409 on duplicate email), `POST /clients/:id/reset` (invalidates prior
+  tokens via `delete where value=userId and identifier like 'reset-password:%'`), DELETE removes
+  user + cascades (agency accounts protected). Unknown chatbot ids in assignment → 400.
+- **Session context:** `lib/session.tsx` provider (fetches `/api/auth/me`, exposes useSession);
+  Topbar reads it; Sidebar filters nav by role (`Clients`+`Settings` agency-only). Client role is
+  redirected away from `/settings` & `/chatbots/new`; Chatbots/Overview hide create CTAs and row
+  controls (pause/delete/model) for clients.
+- **ChatbotEditor role-gating:** client owners see Leads/Knowledge/Test only; Knowledge tab gets
+  an OwnerLookFields section (brand color + WidgetFields w/ owner copy variant); Settings tab and
+  its fields are gone exactly matching the server allowlist.
+- **Preview mode:** `/chatbots/:id?as=owner` (validateSearch-typed) renders the gated view for
+  agencies under a labeled banner w/ Exit; real clients get the same gating permanently.
+- New pages/components: `pages/Clients.tsx` (list, bot chips jump to editor, Add-client dialog →
+  SetupLink dialog w/ copy + open, Assign-bots checkbox dialog, two-step Remove),
+  `components/Dialog.tsx` (Escape/backdrop close), `pages/AcceptInvite.tsx` (password + confirm,
+  field validation, success card).
+- Tests: server `tests/clients.test.ts` (8: create/duplicate/accept+signin/token-reuse/expiry/
+  reset-invalidation/reassign/remove/guards); dashboard `Clients.test.tsx` (4) +
+  `OwnerPortal.test.tsx` (preview tab strip, gating redirects).
+</details>
+
+<details>
+<summary><strong>Client portal polish rounds 1–2 (DONE)</strong></summary>
+
+- **Preview/consumer split:** ChatbotEditor now distinguishes `isClient`, `previewingOwner` and
+  `ownerView` — the "Previewing the owner portal" banner + Exit button render only for agency
+  preview mode (`?as=owner`), never for signed-in clients (the flag that previously
+  produced the bug ignores `?as=owner` for clients too). Regression-tested.
+- **Copy de-agencified for client eyes:** chatbots subtitle, sidebar footer ("for agencies"),
+  overview empty hint, topbar role badge casing; knowledge import card hidden from clients &
+  preview (`canImport`) since `/api/admin/import` is agency-only — no more 403 dead-ends.
+- **Live Overview counters:** new role-scoped `GET /api/admin/stats`
+  (`dashboardStatsSchema`: chatbotsTotal/Active, conversations, leads, messages) replacing
+  placeholder zeros; teaching hints flip once numbers > 0; graceful fallback to zeros if stats
+  fail. Recent-bots rows deep-link into each editor instead of the list page.
+- **Valid chatbot rows:** list rows no longer nest interactive `<button>` elements inside a
+  button (invalid HTML / broken AT navigation); open-editor target and pause/delete controls are
+  siblings in one flex row, stopPropagation hacks removed.
+- **Fresh-bot orientation:** empty Knowledge tab opens with a short "Teach your chatbot about X"
+  intro (why knowledge matters, three fill paths, import mentioned only where available).
+- Tests: OwnerPortal client-journey regressions (no banner/no settings/no import; ?as=owner
+  ignored), scoping.test gains /stats scoping block (76), Overview.test counters/hints/fallback
+  (42 dashboard total).
+</details>
+
 ## Known gaps / tech debt (honest)
 
 <details>
@@ -264,14 +340,10 @@
 
 ## Roadmap — what to build next (in order)
 
-1. **Client accounts UI** — invite owners, assign chatbots. Endpoints already exist:
-   `GET /api/admin/clients`, `PUT /api/admin/clients/:userId/chatbots`.
-   Needs: Clients page (list/invite/assign), client-role login landing that shows only assigned
-   bots (server-side scoping for client role on chatbots/conversations is NOT implemented yet —
-   add `requireRole('agency')` alternatives + ownership filters).
-2. **Lead-capture emails** — SMTP settings surface, `nodemailer`, trigger when visitor name/email
+1. **Lead-capture emails** — SMTP settings surface, `nodemailer`, trigger when visitor name/email
    captured (detect in chat route), digest option later. The editor's Leads tab already lists
-   captured leads; the email notification is the missing push.
+   captured leads; the email notification is the missing push. (Client accounts + portal are DONE:
+   invites via copyable setup links, assignment, owner-scoped UI, preview mode + polish rounds.)
 3. **Conversations browser + analytics** — per-bot thread view, leads inbox, trends/top-questions/
    knowledge-gaps cards; token spend from stored usage columns.
 4. **White-label polish** — agency branding tokens, powered-by default toggle wiring.
@@ -330,21 +402,23 @@ seeded — fresh installs start with a blank chatbot list.
 ## Commit trail (this rebuild)
 
 ```
-<uncommitted> fix: shared ColorField hex typing — wizard + settings both render the same `ColorField`, but its hex input rejected the leading `#` and could never be cleared, so typing a hex code never stuck; extracted a shared `HexInput` (inline + popover) that accepts `#` first, commits once 6 digits are typed, can be cleared, and reverts to the last valid color on blur; wizard test types `#ff0000` through to the create payload
-<uncommitted> fix: wizard "Invalid URL" dead-end — zod v4 `z.string().url()` rejects scheme-less URLs (`acme.com`) in `chatbotInputSchema.websiteUrl/avatarUrl`, so create always failed with "Invalid URL" and the banner never cleared; shared schema now normalizes via `urlOrEmptySchema` (prepend `https://`, like the import schema)
-<uncommitted> feat: provider pin (OpenRouter only) — `provider: {only:[slug]}` routing, Settings field hidden unless OpenRouter, settings storage + tests
-<uncommitted> perf: import — disable reasoning traces on extraction (`reasoning: {effort: none}`, goldilocks short prompt, no max-tokens cap) + empty-result guard throws EXTRACTION_FAILED instead of blank draft; provider request body builder
-<uncommitted> perf: import — parallel sub-page crawl, extraction prompt 60k→30k chars, output cap 8000→4096, 120s provider abort, phase timing logs
-<uncommitted> design: create wizard — two-panel Linear-style flow (typographic centered steps + sticky live widget preview rail), whisper progress segments, URL-derived name, Enter-to-continue, skip-and-create escape; KnowledgeEditor gains aside prop
-<uncommitted> chore: no demo chatbot seed on boot — fresh installs start blank
-<uncommitted> feat: no default model — per-bot override or Settings default, else explicit MODEL_NOT_CONFIGURED (chat/test/import); migration nulls old implicit gpt-4o-mini; Settings default-model field; ModelPicker global-default option
-<uncommitted> feat: zero-config encryption — auto-generated app secret on first launch (env override kept), better-auth uses it, Settings UI shows key location, compose passthrough
-<uncommitted> fix: create wizard Knowledge step — keep import card visible once facts exist (keepImportVisible), make "Show example" reversible via a per-field "Clear example" link
-<uncommitted> feat: guided create wizard (/chatbots/new) mirroring the editor — shared chatbot field components extracted (KnowledgeEditor, WidgetFields, DomainsList, ModelPicker, WidgetSim, state), old inline CreateForm removed, post-create lands in editor Leads tab
-<uncommitted> design: widget header — right-aligned close chevron in every config, bare overlay header (transparent, no border) when logo/name/status all off, welcome message aligned with the chevron; preview mirrors incl. header border
-<uncommitted> feat: widget settings — logo upload (client-side downscale to data URL), show-name toggle, responsive header collapsing
-<uncommitted> feat: widget settings — logo on/off + custom image, "Online now" toggle, powered-by moved into Widget Settings
-<uncommitted> docs: PROGRESS.md — settings editor polish + test count refresh
+59e9e88 design: fresh-bot knowledge orientation — teaching intro card on empty Knowledge tab
+684495b fix: chatbot list rows no longer nest interactive buttons — open-editor button and pause/delete controls are siblings, stopPropagation hacks removed
+7566a16 feat: real overview counters — role-scoped GET /api/admin/stats (chatbotsTotal/Active, conversations, leads, messages) + live Overview cards, deep-linked recent rows
+f76be3a feat: owner portal UI — session context, Clients management page, accept-invite page, role-filtered sidebar, ChatbotEditor gating + ?as=owner preview mode; client-view copy polish (no preview banner for real clients)
+4224e52 feat: client accounts & ownership scoping — client sessions scoped to assigned bots (404 not 403), PUT field allowlist, clients endpoints with setup tokens; partial-PUT systemPrompt wipe fixed
+5b248f3 docs: PROGRESS.md — commit trail entries for ColorField hex + URL schema fixes
+8268726 fix: wizard invalid-URL dead-end — normalize scheme-less website/avatar URLs in shared schema
+1e7b5ab fix: shared ColorField hex typing works everywhere (wizard + settings)
+a4009e7 design: create wizard — two-panel Linear-style redesign
+ae742ef perf: import speed + OpenRouter provider pin
+b874657 fix: capitalize chatbot status labels (Active/Paused/Archived) everywhere — shared label map
+9e12972 feat: explicit model config + zero-config secrets — no implicit model default (Settings default or per-bot, else MODEL_NOT_CONFIGURED), auto-generated app secret, no demo seed on boot
+d38464d feat: guided create wizard (/chatbots/new) — shared chatbot components extracted, post-create lands in editor
+db55828 design: widget header — chevron right-aligned in all configs, bare overlay header (transparent, no border, welcome text aligned with chevron) when logo/name/status are all off; preview mirrors including header border
+2693855 feat: widget settings round 2 — logo upload, hide business name, responsive header
+291e353 feat: widget settings — logo on/off + custom image, online-now toggle, powered-by badge
+7abb87f docs: PROGRESS.md — settings editor polish, test count refresh, clean commit trail
 92e4ca4 feat: chatbot settings editor — typeable brand color, domain line list, status dropdown
 16193ef fix: chat replies — plain-text facts, brevity guardrails, unwrap JSON replies, markdown widget, temp 0.4
 5759fdf feat: knowledge editor + import UX — Notion-doc facts, clear-all-facts, leads graphs
