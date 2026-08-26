@@ -400,9 +400,7 @@ describe('ChatbotEditor', () => {
     renderAtLocation('/chatbots/ch_edit1')
     await openTab('Settings')
 
-    expect(
-      await screen.findByText(/open to any website — list an allowed domain/i),
-    ).toBeDefined()
+    expect(await screen.findByText(/open to any website — list an allowed domain/i)).toBeDefined()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Add domain' }))
     fireEvent.change(screen.getByLabelText('Allowed domain 1'), {
