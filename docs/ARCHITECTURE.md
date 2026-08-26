@@ -62,8 +62,8 @@ Hono application. Route groups:
 | Area | Routes | Auth |
 | --- | --- | --- |
 | Public chat | `GET /api/chatbots/:id` (public metadata) · `POST /api/chat/:chatbotId/messages` · `POST /api/chat/:chatbotId/messages/stream` (SSE) | none; origin checked against chatbot's domain allowlist |
-| Auth | better-auth mounted routes (email+password, passkeys, sessions) · `GET /api/auth/me` (current user) · `GET /api/auth/bootstrap` (fresh-install detection → `{ hasUsers }`) | rate-limited |
-| Dashboard API | chatbots CRUD, clients, conversations, leads, analytics, settings, **website import** (`POST /api/admin/import`), **draft-facts tester** (`POST /api/admin/chatbots/:id/test`), **leads** (`GET /api/admin/chatbots/:id/leads`), **per-bot activity stats** (`GET /api/admin/chatbots/:id/stats?days=30`, daily conversation/lead/message buckets + totals) | better-auth session; role-scoped queries |
+| Auth | better-auth mounted routes (email+password, passkeys, sessions) · `GET /api/auth/me` (current user) · `GET /api/auth/bootstrap` (fresh-install detection → `{ hasUsers }`) · public `POST /api/auth/reset-password` doubles as the one-time completion for invited clients (agency stores a `reset-password:<token>` verification row; the accept page calls this endpoint natively) | rate-limited |
+| Dashboard API | chatbots CRUD, clients (list/create-invite/assign/reset-link/remove), conversations, leads, analytics, settings, **website import** (`POST /api/admin/import`), **draft-facts tester** (`POST /api/admin/chatbots/:id/test`), **leads** (`GET /api/admin/chatbots/:id/leads`), **per-bot activity stats** (`GET /api/admin/chatbots/:id/stats?days=30`, daily conversation/lead/message buckets + totals) | better-auth session; role-scoped queries (client sessions may read/update only assigned chatbots) |
 | Static | `/admin/*` (SPA), `/embed.js` (cacheable `public, max-age=600`) | none |
 
 Cross-cutting middleware: security headers, per-visitor + auth rate limits, request logging (pino), error envelope (consistent problem+json-style errors).
@@ -89,15 +89,18 @@ One React SPA at `/admin` (login included), built on **TanStack Router** (code-b
 | Path | View | Notes |
 | --- | --- | --- |
 | `/login` | Sign-in / sign-up | Outside the guarded layout; defaults to **sign-up** when `GET /api/auth/bootstrap` reports an empty database |
+| `/accept/$token` | Set-password page for invited clients | Public; completes the agency-issued setup link via better-auth reset-password |
 | `/` | Overview | Live counts |
 | `/chatbots` | List (+ `?new=1` opens create) | URL-driven intent |
-| `/chatbots/$botId` | Full chatbot editor | Deep-linkable per client |
+| `/chatbots/new` | Create wizard | Agency-only; clients redirect to `/` |
+| `/chatbots/$botId` | Full chatbot editor | Deep-linkable per client; `?as=owner` renders the gated owner view for agency preview |
+| `/clients` | Client management | Agency-only: list + assigned-bot chips, add-client dialog with copyable setup link, assign chatbots, new setup link, remove |
 | `/settings` | Provider & key config | Agency role only |
 
-Auth is enforced by a `beforeLoad` guard on the layout route (redirects to `/login` when the session is absent); role scoping is re-verified server-side on every request. In production the router runs with basepath `/admin` and the Hono server SPA-falls back any `/admin/*` path to the built `index.html`. Tests render pages through the same tree using memory history (`renderAtLocation`). Role-aware views:
+Auth is enforced by a `beforeLoad` guard on the layout route (redirects to `/login` when the session is absent); a session context (`lib/session.tsx`) shares the user with shell/components; role scoping is re-verified server-side on every request. In production the router runs with basepath `/admin` and the Hono server SPA-falls back any `/admin/*` path to the built `index.html`. Tests render pages through the same tree using memory history (`renderAtLocation`). Role-aware views:
 
-- **Agency views:** setup wizard, chatbot list/create/edit (facts editor + FAQ pairs + prompt preview), client management, cross-bot conversation browser, lead inbox, analytics overview, settings (AI key, default model, SMTP, branding, powered-by default).
-- **Client views:** their chatbot(s) only — facts/appearance editor with the in-editor Test tab, chat history, lead list + CSV export, stats.
+- **Agency views:** setup wizard, chatbot list/create/edit (facts editor + FAQ pairs + prompt preview), client management (above), cross-bot conversation browser, lead inbox, analytics overview, settings (AI key, default model, SMTP, branding, powered-by default).
+- **Client views:** their chatbot(s) only — Leads/Knowledge/Test tabs plus brand-color and widget-appearance editing (exactly the fields the server allowlist accepts); no model/status/domains/embed/delete.
 
 Data fetching via TanStack Query against the shared Zod contracts; UI via shadcn/ui + Tailwind v4. Design language follows PRODUCT.md principle 1 — clean, modern, premium; dark-mode aware; mobile-capable.
 

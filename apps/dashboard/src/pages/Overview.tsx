@@ -3,9 +3,12 @@ import { useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Bot, MessageSquare, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { apiFetch } from '../lib/api'
+import { useSession } from '../lib/session'
 
 export function Overview() {
   const navigate = useNavigate({ from: '/' })
+  const { user } = useSession()
+  const agencyControls = !user || user.role === 'agency'
   const [bots, setBots] = useState<ChatbotAdminView[] | null>(null)
 
   useEffect(() => {
@@ -31,7 +34,9 @@ export function Overview() {
       value: bots === null ? '…' : String(total),
       hint:
         total === 0
-          ? 'Create your first chatbot to get started'
+          ? agencyControls
+            ? 'Create your first chatbot to get started'
+            : 'Connected by your agency once setup is complete'
           : `${active} active · ${total - active} paused or archived`,
     },
     {
@@ -49,7 +54,9 @@ export function Overview() {
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-10">
       <h1 className="text-3xl font-semibold tracking-tight">Overview</h1>
-      <p className="mt-1.5 text-sm text-muted-foreground">A live view of every chatbot you run.</p>
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        {agencyControls ? 'A live view of every chatbot you run.' : 'A live view of your chatbots.'}
+      </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         {stats.map(({ label, value, hint }) => (
@@ -113,11 +120,12 @@ export function Overview() {
             </h3>
             {bots !== null && (
               <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
-                Create your first chatbot, paste one script tag on your client's site, and start
-                capturing leads today.
+                {agencyControls
+                  ? "Create your first chatbot, paste one script tag on your client's site, and start capturing leads today."
+                  : 'Once your agency connects a chatbot to your account, its activity appears here.'}
               </p>
             )}
-            {bots !== null && (
+            {bots !== null && agencyControls && (
               <button
                 type="button"
                 onClick={() => navigate({ to: '/chatbots/new' })}

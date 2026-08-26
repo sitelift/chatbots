@@ -5,15 +5,18 @@ import {
   Outlet,
   RouterProvider,
   redirect,
+  useNavigate,
   useParams,
   useRouterState,
 } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Topbar } from './components/Topbar'
-import type { AppUser } from './lib/auth-client'
+import { SessionProvider, useSession } from './lib/session'
+import { AcceptInvitePage } from './pages/AcceptInvite'
 import { ChatbotEditor } from './pages/ChatbotEditor'
 import { ChatbotsPage } from './pages/Chatbots'
+import { ClientsPage } from './pages/Clients'
 import { LoginPage } from './pages/Login'
 import { NewChatbotPage } from './pages/NewChatbot'
 import { Overview } from './pages/Overview'
@@ -21,37 +24,49 @@ import { SettingsPage } from './pages/Settings'
 
 function Shell({ children }: { children: React.ReactNode }) {
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
-  const [user, setUser] = useState<AppUser | null>(null)
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
   }, [dark])
 
-  useEffect(() => {
-    const cancelled = false
-    fetch('/api/auth/me')
-      .then(async (res) => (res.ok ? ((await res.json()) as AppUser) : null))
-      .then((u) => {
-        if (!cancelled) setUser(u)
-      })
-  }, [])
-
   return (
-    <div className="flex h-screen bg-background text-foreground">
-      <Sidebar pathname={pathname} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar dark={dark} user={user} onToggleTheme={() => setDark((d) => !d)} />
-        <main className="flex-1 overflow-y-auto bg-muted/20">{children}</main>
+    <SessionProvider>
+      <div className="flex h-screen bg-background text-foreground">
+        <Sidebar pathname={pathname} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar dark={dark} onToggleTheme={() => setDark((d) => !d)} />
+          <main className="flex-1 overflow-y-auto bg-muted/20">{children}</main>
+        </div>
       </div>
-    </div>
+    </SessionProvider>
   )
+}
+
+function AgencyOnly({ children }: { children: React.ReactNode }) {
+  const { user, status } = useSession()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (status === 'ready' && user && user.role !== 'agency') {
+      navigate({ to: '/' })
+    }
+  }, [status, user, navigate])
+
+  if (user?.role !== 'agency') return null
+  return <>{children}</>
 }
 
 function EditorRoute() {
   const params = useParams({ strict: false }) as { botId?: string }
+  const search = useRouterState({ select: (s) => s.location.search }) as { as?: string }
   if (!params.botId) return null
-  return <ChatbotEditor botId={params.botId} />
+  return <ChatbotEditor botId={params.botId} previewOwner={search.as === 'owner'} />
+}
+
+function AcceptInviteRoute() {
+  const params = useParams({ strict: false }) as { token?: string }
+  return <AcceptInvitePage token={params.token ?? ''} />
 }
 
 export function buildRouteTree(options?: { authGuard?: boolean }) {
@@ -70,6 +85,12 @@ export function buildRouteTree(options?: { authGuard?: boolean }) {
     getParentRoute: () => rootRoute,
     path: '/login',
     component: LoginPage,
+  })
+
+  const acceptInviteRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/accept/$token',
+    component: AcceptInviteRoute,
   })
 
   const layoutRoute = createRoute({
@@ -102,28 +123,51 @@ export function buildRouteTree(options?: { authGuard?: boolean }) {
   const newChatbotRoute = createRoute({
     getParentRoute: () => layoutRoute,
     path: '/chatbots/new',
-    component: NewChatbotPage,
+    component: () => (
+      <AgencyOnly>
+        <NewChatbotPage />
+      </AgencyOnly>
+    ),
   })
 
   const chatbotEditRoute = createRoute({
     getParentRoute: () => layoutRoute,
     path: '/chatbots/$botId',
+    validateSearch: (search: Record<string, unknown>) => ({
+      as: typeof search.as === 'string' ? search.as : undefined,
+    }),
     component: EditorRoute,
+  })
+
+  const clientsRoute = createRoute({
+    getParentRoute: () => layoutRoute,
+    path: '/clients',
+    component: () => (
+      <AgencyOnly>
+        <ClientsPage />
+      </AgencyOnly>
+    ),
   })
 
   const settingsRoute = createRoute({
     getParentRoute: () => layoutRoute,
     path: '/settings',
-    component: SettingsPage,
+    component: () => (
+      <AgencyOnly>
+        <SettingsPage />
+      </AgencyOnly>
+    ),
   })
 
   return rootRoute.addChildren([
     loginRoute,
+    acceptInviteRoute,
     layoutRoute.addChildren([
       indexRoute,
       chatbotsRoute,
       newChatbotRoute,
       chatbotEditRoute,
+      clientsRoute,
       settingsRoute,
     ]),
   ])

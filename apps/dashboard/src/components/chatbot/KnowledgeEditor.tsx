@@ -84,6 +84,7 @@ export function KnowledgeEditor({
   preview,
   showGreeting = true,
   keepImportVisible = false,
+  canImport = true,
   aside = true,
 }: {
   form: FormState
@@ -91,6 +92,7 @@ export function KnowledgeEditor({
   preview: string
   showGreeting?: boolean
   keepImportVisible?: boolean
+  canImport?: boolean
   aside?: boolean
 }) {
   const [importUrl, setImportUrl] = useState('')
@@ -193,7 +195,7 @@ export function KnowledgeEditor({
   return (
     <div className={aside ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]' : ''}>
       <div className="min-w-0 space-y-5">
-        {!hasFacts || keepImportVisible ? (
+        {canImport && (!hasFacts || keepImportVisible) ? (
           <section className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>

@@ -31,7 +31,15 @@ function readLogoFile(file: File): Promise<string> {
   })
 }
 
-export function WidgetFields({ form, set }: { form: FormState; set: FormSetter }) {
+export function WidgetFields({
+  form,
+  set,
+  forOwner = false,
+}: {
+  form: FormState
+  set: FormSetter
+  forOwner?: boolean
+}) {
   const [logoBusy, setLogoBusy] = useState(false)
   const [logoError, setLogoError] = useState('')
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -56,7 +64,9 @@ export function WidgetFields({ form, set }: { form: FormState; set: FormSetter }
     <section className="rounded-xl border bg-card p-5 shadow-sm">
       <h2 className="text-base font-medium">Widget Settings</h2>
       <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-        What visitors see in the chat widget on your client's site.
+        {forOwner
+          ? 'What visitors see in the chat widget on your website.'
+          : "What visitors see in the chat widget on your client's site."}
       </p>
 
       <div className="mt-5 flex items-center gap-3 rounded-lg border bg-muted/30 p-3">

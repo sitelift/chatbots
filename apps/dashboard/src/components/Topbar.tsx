@@ -1,13 +1,15 @@
 import { Moon, Sun } from 'lucide-react'
-import { type AppUser, authClient } from '../lib/auth-client'
+import { authClient } from '../lib/auth-client'
+import { useSession } from '../lib/session'
 
 interface TopbarProps {
   dark: boolean
-  user: AppUser | null
   onToggleTheme: () => void
 }
 
-export function Topbar({ dark, user, onToggleTheme }: TopbarProps) {
+export function Topbar({ dark, onToggleTheme }: TopbarProps) {
+  const { user } = useSession()
+
   async function signOut() {
     await authClient.signOut()
     window.location.reload()
@@ -25,7 +27,7 @@ export function Topbar({ dark, user, onToggleTheme }: TopbarProps) {
                 : 'bg-muted text-muted-foreground'
             }`}
           >
-            {user.role}
+            {user.role === 'agency' ? 'Agency' : 'Client'}
           </span>
         </span>
       )}

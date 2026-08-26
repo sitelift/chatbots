@@ -14,6 +14,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Eye,
   Inbox,
   LoaderCircle,
   Mail,
@@ -32,11 +33,13 @@ import { WidgetFields } from '../components/chatbot/WidgetFields'
 import { WidgetSim } from '../components/chatbot/WidgetSim'
 import { StatusBadge } from '../components/StatusBadge'
 import { type AdminApiError, apiFetch } from '../lib/api'
+import { useSession } from '../lib/session'
 import { inputClass, labelClass } from '../lib/ui'
 import { uid } from '../lib/uid'
 
 interface EditorProps {
   botId: string
+  previewOwner?: boolean
 }
 
 function initials(name: string | null, email: string | null): string {
@@ -50,8 +53,9 @@ function initials(name: string | null, email: string | null): string {
 
 type Tab = 'leads' | 'knowledge' | 'test' | 'settings'
 
-export function ChatbotEditor({ botId }: EditorProps) {
+export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
   const navigate = useNavigate()
+  const { user } = useSession()
 
   const [view, setView] = useState<ChatbotAdminView | null>(null)
   const [form, setForm] = useState<FormState | null>(null)
@@ -65,6 +69,10 @@ export function ChatbotEditor({ botId }: EditorProps) {
   const [deleting, setDeleting] = useState(false)
   const [tab, setTabState] = useState<Tab>('leads')
   const tabChosenRef = useRef(false)
+
+  const isClient = user?.role === 'client'
+  const previewingOwner = previewOwner && !isClient
+  const ownerView = isClient || previewOwner
 
   const serializedForm = form ? JSON.stringify(form) : ''
   const dirty = Boolean(form) && serializedForm !== baseline
@@ -224,12 +232,13 @@ export function ChatbotEditor({ botId }: EditorProps) {
     )
   }
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  const allTabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'leads', label: 'Leads', icon: <Inbox className="size-3.5" /> },
     { id: 'knowledge', label: 'Knowledge', icon: <BookOpen className="size-3.5" /> },
     { id: 'test', label: 'Test', icon: <Send className="size-3.5" /> },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon className="size-3.5" /> },
   ]
+  const tabs = allTabs.filter((t) => !ownerView || t.id !== 'settings')
 
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-10">
@@ -238,7 +247,26 @@ export function ChatbotEditor({ botId }: EditorProps) {
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">{view.name}</h1>
         <StatusBadge status={view.status} />
+        {view.websiteUrl && (
+          <span className="text-sm text-muted-foreground">{view.websiteUrl}</span>
+        )}
       </div>
+
+      {previewingOwner && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 px-4 py-2.5">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Eye className="size-4 text-primary" />
+            Previewing the owner portal — this is what your client sees and can edit.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate({ to: '/clients' })}
+            className="shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            Exit preview
+          </button>
+        </div>
+      )}
 
       {savedFlash && (
         <div
@@ -281,9 +309,14 @@ export function ChatbotEditor({ botId }: EditorProps) {
 
       <div className="mt-6">
         {tab === 'leads' && <LeadsTab botId={botId} />}
-        {tab === 'knowledge' && <KnowledgeEditor form={form} set={set} preview={preview} />}
+        {tab === 'knowledge' && (
+          <div className="space-y-5">
+            <KnowledgeEditor form={form} set={set} preview={preview} canImport={!ownerView} />
+            {ownerView && <OwnerLookFields form={form} set={set} />}
+          </div>
+        )}
         {tab === 'test' && <TestTab botId={botId} form={form} />}
-        {tab === 'settings' && (
+        {tab === 'settings' && !ownerView && (
           <SettingsTab
             view={view}
             form={form}
@@ -532,6 +565,23 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function OwnerLookFields({ form, set }: { form: FormState; set: FormSetter }) {
+  return (
+    <div className="space-y-5">
+      <section className="rounded-xl border bg-card p-5 shadow-sm">
+        <h2 className="text-base font-medium">Brand color</h2>
+        <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+          Used across the chat bubble and panel on your website.
+        </p>
+        <div className="mt-3 max-w-xs">
+          <ColorField value={form.brandColor} onChange={(v) => set('brandColor', v)} />
+        </div>
+      </section>
+      <WidgetFields form={form} set={set} forOwner />
     </div>
   )
 }
