@@ -1,5 +1,5 @@
 import type { BusinessFacts, ImportResult } from '@sitelift/shared'
-import { Check, Copy, LoaderCircle, Plus, X } from 'lucide-react'
+import { Check, Copy, GraduationCap, LoaderCircle, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { type AdminApiError, apiFetch } from '../../lib/api'
 import { inputClass, textareaClass } from '../../lib/ui'
@@ -195,6 +195,40 @@ export function KnowledgeEditor({
   return (
     <div className={aside ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]' : ''}>
       <div className="min-w-0 space-y-5">
+        {!hasFacts && (
+          <section className="rounded-xl border border-primary/20 bg-primary/[0.04] p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10">
+                <GraduationCap className="size-4 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-base font-medium">
+                  Teach your chatbot{form.name.trim() ? ` about ${form.name.trim()}` : ''}
+                </h2>
+                <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                  Visitors get answers built only from what is written here — the more it knows,
+                  the fewer questions it fumbles.
+                </p>
+                <ul className="mt-3 space-y-1 text-[13px] leading-relaxed text-muted-foreground">
+                  {canImport && (
+                    <li className="flex gap-2">
+                      <span aria-hidden>·</span>
+                      Fastest start: import your website below and we fill most fields for you.
+                    </li>
+                  )}
+                  <li className="flex gap-2">
+                    <span aria-hidden>·</span>
+                    Or answer each section like you would brief a brand-new hire on day one.
+                  </li>
+                  <li className="flex gap-2">
+                    <span aria-hidden>·</span>
+                    FAQ pairs are gold — they capture the exact questions your customers ask.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+        )}
         {canImport && (!hasFacts || keepImportVisible) ? (
           <section className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="flex items-start justify-between gap-4">
