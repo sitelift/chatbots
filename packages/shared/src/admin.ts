@@ -140,6 +140,24 @@ export const clientUserViewSchema = z.object({
 
 export type ClientUserView = z.infer<typeof clientUserViewSchema>
 
+export const createClientSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address'),
+  name: z.string().trim().min(1).max(80).optional(),
+})
+
+export type CreateClientInput = z.infer<typeof createClientSchema>
+
+export const setupTokenSchema = z.object({ setupToken: z.string() })
+
+export type SetupTokenResult = z.infer<typeof setupTokenSchema>
+
+export const acceptInviteSchema = z.object({
+  token: z.string().min(10).max(200),
+  password: z.string().min(10, 'Password must be at least 10 characters'),
+})
+
+export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>
+
 export const ADMIN_ROUTES = {
   chatbots: '/api/admin/chatbots',
   chatbot: (id: string) => `/api/admin/chatbots/${id}`,

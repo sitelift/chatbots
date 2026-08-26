@@ -43,8 +43,16 @@ describe('auth bootstrap', () => {
 })
 
 describe('role guards', () => {
-  it('blocks clients from admin routes', async () => {
+  it('lets clients through scoped list endpoints', async () => {
     const res = await createApp().request('/api/admin/chatbots', {
+      headers: { Cookie: client.cookie },
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()).chatbots).toEqual([])
+  })
+
+  it('blocks clients from agency-only routes', async () => {
+    const res = await createApp().request('/api/admin/settings', {
       headers: { Cookie: client.cookie },
     })
     expect(res.status).toBe(403)

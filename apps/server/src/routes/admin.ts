@@ -6,10 +6,11 @@ import {
   chatbotTestSchema,
   clientUserViewSchema,
   composeSystemPrompt,
+  createClientSchema,
   importRequestSchema,
   unwrapJsonReply,
 } from '@sitelift/shared'
-import { and, desc, eq, gte, inArray, isNotNull, or } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNotNull, like, or } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { db } from '../db'
@@ -19,11 +20,12 @@ import {
   conversations,
   messages,
   user as userTable,
+  verification,
 } from '../db/schema'
-import { newId } from '../lib/ids'
+import { newId, newToken } from '../lib/ids'
 import { logger } from '../lib/logger'
 import { CatalogError, fetchModelCatalog } from '../lib/modelCatalog'
-import { requireRole } from '../lib/session'
+import { type RequestUser, requireRole } from '../lib/session'
 import { extractBusinessFacts, fetchSiteText, ImportError } from '../services/importer'
 import { completePlain } from '../services/provider'
 import {
@@ -38,9 +40,16 @@ import {
   saveProviderPin,
 } from '../services/settings'
 
-export const adminRoutes = new Hono()
+type AdminContext = { Variables: { user: RequestUser } }
 
-adminRoutes.use('*', requireRole('agency'))
+export const adminRoutes = new Hono<AdminContext>()
+
+adminRoutes.use('*', requireRole('agency', 'client'))
+adminRoutes.use('/clients', requireRole('agency'))
+adminRoutes.use('/clients/*', requireRole('agency'))
+adminRoutes.use('/settings', requireRole('agency'))
+adminRoutes.use('/import', requireRole('agency'))
+adminRoutes.use('/models', requireRole('agency'))
 
 function toView(row: typeof chatbots.$inferSelect): ChatbotAdminView {
   return {
@@ -98,13 +107,37 @@ function settingsError(c: Context, err: unknown) {
   return c.json({ error: { code: 'INTERNAL', message: 'Something went wrong' } }, 500)
 }
 
+function notFound(c: Context) {
+  return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+}
+
+async function assignedChatbotIds(userId: string): Promise<string[]> {
+  const rows = db
+    .select({ chatbotId: clientAssignments.chatbotId })
+    .from(clientAssignments)
+    .where(eq(clientAssignments.userId, userId))
+    .all()
+  return rows.map((r) => r.chatbotId)
+}
+
+async function hasBotAccess(user: RequestUser, chatbotId: string): Promise<boolean> {
+  if (user.role === 'agency') return true
+  const ids = await assignedChatbotIds(user.id)
+  return ids.includes(chatbotId)
+}
+
 adminRoutes.get('/chatbots', async (c) => {
-  const rows = await db.query.chatbots.findMany()
+  const user = c.get('user')
+  let rows = await db.query.chatbots.findMany()
+  if (user && user.role !== 'agency') {
+    const ids = await assignedChatbotIds(user.id)
+    rows = rows.filter((r) => ids.includes(r.id))
+  }
   const sorted = rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   return c.json({ chatbots: sorted.map(toView) })
 })
 
-adminRoutes.post('/chatbots', async (c) => {
+adminRoutes.post('/chatbots', requireRole('agency'), async (c) => {
   const parsed = chatbotInputSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) {
     return c.json(
@@ -147,19 +180,21 @@ adminRoutes.post('/chatbots', async (c) => {
 })
 
 adminRoutes.get('/chatbots/:id', async (c) => {
+  const user = c.get('user')
   const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
-  if (!row) {
-    return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  if (!row || !user || !(await hasBotAccess(user, row.id))) {
+    return notFound(c)
   }
   return c.json(toView(row))
 })
 
 adminRoutes.put('/chatbots/:id', async (c) => {
   const id = c.req.param('id')
-  if (!id) return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  if (!id) return notFound(c)
   const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, id) })
-  if (!row) {
-    return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  const user = c.get('user')
+  if (!row || !user || !(await hasBotAccess(user, row.id))) {
+    return notFound(c)
   }
   const parsed = chatbotInputSchema.partial().safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) {
@@ -173,12 +208,24 @@ adminRoutes.put('/chatbots/:id', async (c) => {
       400,
     )
   }
-  const patch = {
-    ...parsed.data,
-    systemPrompt: resolvePrompt(parsed.data),
-    factsJson: serializeFacts(parsed.data),
-    updatedAt: new Date(),
-  }
+  const raw = parsed.data
+  const patchSource: FactsInput =
+    user.role === 'agency'
+      ? raw
+      : {
+          welcomeMessage: raw.welcomeMessage,
+          quickReplies: raw.quickReplies,
+          brandColor: raw.brandColor,
+          avatarUrl: raw.avatarUrl,
+          showLogo: raw.showLogo,
+          showName: raw.showName,
+          showOnlineStatus: raw.showOnlineStatus,
+          poweredBy: raw.poweredBy,
+          facts: raw.facts,
+        }
+  const patch = { ...patchSource, factsJson: serializeFacts(patchSource), updatedAt: new Date() }
+  if (patchSource.facts) patch.systemPrompt = composeSystemPrompt(patchSource.facts)
+  else if (patchSource.facts === null) patch.systemPrompt = ''
   db.update(chatbots)
     .set({
       ...patch,
@@ -193,7 +240,7 @@ adminRoutes.put('/chatbots/:id', async (c) => {
   return c.json(toView(updated))
 })
 
-adminRoutes.delete('/chatbots/:id', async (c) => {
+adminRoutes.delete('/chatbots/:id', requireRole('agency'), async (c) => {
   const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
   if (!row) {
     return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
@@ -280,10 +327,10 @@ adminRoutes.post('/import', async (c) => {
 })
 
 adminRoutes.post('/chatbots/:id/test', async (c) => {
-  const id = c.req.param('id')
-  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, id) })
-  if (!row) {
-    return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  const user = c.get('user')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
+  if (!row || !user || !(await hasBotAccess(user, row.id))) {
+    return notFound(c)
   }
   const parsed = chatbotTestSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) {
@@ -348,17 +395,17 @@ adminRoutes.post('/chatbots/:id/test', async (c) => {
 })
 
 adminRoutes.get('/chatbots/:id/leads', async (c) => {
-  const id = c.req.param('id')
-  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, id) })
-  if (!row) {
-    return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  const user = c.get('user')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
+  if (!row || !user || !(await hasBotAccess(user, row.id))) {
+    return notFound(c)
   }
   const convs = db
     .select()
     .from(conversations)
     .where(
       and(
-        eq(conversations.chatbotId, id),
+        eq(conversations.chatbotId, row.id),
         or(isNotNull(conversations.visitorName), isNotNull(conversations.visitorEmail)),
       ),
     )
@@ -402,11 +449,12 @@ function dayKey(date: Date): string {
 }
 
 adminRoutes.get('/chatbots/:id/stats', async (c) => {
-  const id = c.req.param('id')
-  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, id) })
-  if (!row) {
-    return c.json({ error: { code: 'NOT_FOUND', message: 'Chatbot not found' } }, 404)
+  const user = c.get('user')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
+  if (!row || !user || !(await hasBotAccess(user, row.id))) {
+    return notFound(c)
   }
+  const id = c.req.param('id') as string
 
   const requested = Number.parseInt(c.req.query('days') ?? '30', 10)
   const windowDays = Number.isFinite(requested) && requested > 0 ? Math.min(requested, 90) : 30
@@ -508,8 +556,63 @@ async function clientViews(userIds?: string[]): Promise<ClientUserView[]> {
   }))
 }
 
+function invalidInput(c: Context, message: string) {
+  return c.json({ error: { code: 'INVALID_INPUT', message } }, 400)
+}
+
+async function createPasswordSetupToken(userId: string): Promise<string> {
+  const token = newToken()
+  db.insert(verification)
+    .values({
+      id: newId('verification'),
+      identifier: `reset-password:${token}`,
+      value: userId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .run()
+  return token
+}
+
+function clearPasswordSetupTokens(userId: string): void {
+  db.delete(verification)
+    .where(and(eq(verification.value, userId), like(verification.identifier, 'reset-password:%')))
+    .run()
+}
+
 adminRoutes.get('/clients', async (c) => {
   return c.json({ clients: await clientViews() })
+})
+
+adminRoutes.post('/clients', async (c) => {
+  const parsed = createClientSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return invalidInput(c, parsed.error.issues[0]?.message ?? 'Invalid input')
+  }
+  const { email, name } = parsed.data
+  const existing = await db.query.user.findFirst({ where: eq(userTable.email, email) })
+  if (existing) {
+    return c.json(
+      { error: { code: 'EMAIL_TAKEN', message: 'A user with that email already exists' } },
+      409,
+    )
+  }
+  const now = new Date()
+  const id = newId('user')
+  db.insert(userTable)
+    .values({
+      id,
+      name: name || email.split('@')[0] || email,
+      email,
+      role: 'client',
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run()
+  const setupToken = await createPasswordSetupToken(id)
+  const [view] = await clientViews([id])
+  return c.json({ client: clientUserViewSchema.parse(view), setupToken }, 201)
 })
 
 adminRoutes.put('/clients/:userId/chatbots', async (c) => {
@@ -520,16 +623,18 @@ adminRoutes.put('/clients/:userId/chatbots', async (c) => {
     return c.json({ error: { code: 'NOT_FOUND', message: 'User not found' } }, 404)
   }
   if (target.role !== 'client') {
-    return c.json(
-      {
-        error: { code: 'INVALID_INPUT', message: 'Only client accounts can be assigned chatbots' },
-      },
-      400,
-    )
+    return invalidInput(c, 'Only client accounts can be assigned chatbots')
   }
   const parsed = assignSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) {
-    return c.json({ error: { code: 'INVALID_INPUT', message: 'Invalid chatbotIds' } }, 400)
+    return invalidInput(c, 'Invalid chatbotIds')
+  }
+
+  const known = await db.select({ id: chatbots.id }).from(chatbots)
+  for (const chatbotId of parsed.data.chatbotIds) {
+    if (!known.some((b) => b.id === chatbotId)) {
+      return invalidInput(c, `Unknown chatbot: ${chatbotId}`)
+    }
   }
 
   const existing = await db
@@ -550,4 +655,32 @@ adminRoutes.put('/clients/:userId/chatbots', async (c) => {
   const [view] = await clientViews([userId])
   const validated = clientUserViewSchema.parse(view)
   return c.json(validated)
+})
+
+adminRoutes.post('/clients/:userId/reset', async (c) => {
+  const userId = c.req.param('userId')
+  const target = await db.query.user.findFirst({ where: eq(userTable.id, userId) })
+  if (!target) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'User not found' } }, 404)
+  }
+  if (target.role !== 'client') {
+    return invalidInput(c, 'Only client accounts can be reset')
+  }
+  clearPasswordSetupTokens(target.id)
+  const setupToken = await createPasswordSetupToken(target.id)
+  return c.json({ setupToken })
+})
+
+adminRoutes.delete('/clients/:userId', async (c) => {
+  const userId = c.req.param('userId')
+  const target = await db.query.user.findFirst({ where: eq(userTable.id, userId) })
+  if (!target) {
+    return c.json({ error: { code: 'NOT_FOUND', message: 'User not found' } }, 404)
+  }
+  if (target.role === 'agency') {
+    return invalidInput(c, 'Agency accounts cannot be removed here')
+  }
+  clearPasswordSetupTokens(target.id)
+  db.delete(userTable).where(eq(userTable.id, userId)).run()
+  return c.body(null, 204)
 })
