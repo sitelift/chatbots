@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react'
+import { Plus, TriangleAlert, X } from 'lucide-react'
 import { inputClass, labelClass } from '../../lib/ui'
 import { uid } from '../../lib/uid'
 import type { EditableDomain } from './state'
@@ -28,8 +28,10 @@ export function DomainsList({
       </div>
       <div className="mt-1.5 space-y-2">
         {domains.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
-            No domains yet — add the sites that may embed this widget.
+          <p className="flex items-start gap-2 rounded-md bg-warning/10 px-3 py-2 text-[13px] leading-relaxed text-foreground">
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
+            With no domains listed, this widget answers from any website. Add your client's domain
+            to lock it to their site.
           </p>
         ) : (
           domains.map((domain, i) => (

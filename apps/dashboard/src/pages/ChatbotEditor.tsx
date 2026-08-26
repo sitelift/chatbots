@@ -21,6 +21,7 @@ import {
   Send,
   Settings as SettingsIcon,
   Trash2,
+  TriangleAlert,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ColorField } from '../components/ColorField'
@@ -654,6 +655,7 @@ function SettingsTab({ view, form, set, armedDelete, deleting, onDelete }: Setti
   const [statusPickerOpen, setStatusPickerOpen] = useState(false)
   const statusPickerRef = useRef<HTMLDivElement>(null)
   const snippet = `<script src="${window.location.origin}/embed.js" data-chatbot-id="${view.id}"></script>`
+  const openToAnySite = form.status === 'active' && form.domains.every((d) => !d.value.trim())
 
   useEffect(() => {
     if (!statusPickerOpen) return
@@ -773,6 +775,12 @@ function SettingsTab({ view, form, set, armedDelete, deleting, onDelete }: Setti
                 </div>
               )}
             </div>
+            {openToAnySite && (
+              <p className="mt-2 flex items-start gap-2 rounded-md bg-warning/10 px-3 py-2 text-[13px] leading-relaxed text-foreground">
+                <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                Live and open to any website — list an allowed domain below to lock it down.
+              </p>
+            )}
           </div>
         </div>
       </section>

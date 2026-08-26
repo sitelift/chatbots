@@ -394,4 +394,29 @@ describe('ChatbotEditor', () => {
     expect(currentPath()).toBe('/chatbots')
     expect(screen.queryByRole('dialog')).toBeNull()
   })
+
+  it('warns when an active bot has no allowed domains', async () => {
+    editorStub({ allowedDomains: [] })
+    renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Settings')
+
+    expect(
+      await screen.findByText(/open to any website — list an allowed domain/i),
+    ).toBeDefined()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add domain' }))
+    fireEvent.change(screen.getByLabelText('Allowed domain 1'), {
+      target: { value: 'acme.com' },
+    })
+    expect(screen.queryByText(/open to any website/i)).toBeNull()
+  })
+
+  it('does not warn when the bot is paused with no domains', async () => {
+    editorStub({ allowedDomains: [], status: 'paused' })
+    renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Settings')
+
+    expect(await screen.findByText('Basics')).toBeDefined()
+    expect(screen.queryByText(/open to any website/i)).toBeNull()
+  })
 })
