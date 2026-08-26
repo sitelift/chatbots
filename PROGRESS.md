@@ -3,12 +3,11 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** client-portal polish rounds 1–2 committed and pushed. Round 1: preview
-> banner no longer renders for real clients (`previewingOwner` split from `ownerView`),
-> agency-speak removed from every client surface, website import hidden where forbidden.
-> Round 2: live Overview counters via role-scoped `GET /api/admin/stats`, valid (non-nested)
-> a11y chatbot rows with deep-linked editors, fresh-bot knowledge orientation card. Next up:
-> keep refining the client journey, then lead-capture emails.
+> **Last updated:** client-portal polish rounds 1–3 committed and pushed. Round 3: single
+> `/api/auth/me` round-trip per load (shared memoized `fetchMe()`), in-app discard confirmation
+> replacing native `window.confirm`, AcceptInvite page raised to login-page standard (shared auth
+> field components, strength meter, validation). Next up: keep refining the client journey,
+> then lead-capture emails.
 
 ---
 
@@ -18,7 +17,7 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 118 passing (76 server · 42 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 126 passing (76 server · 50 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
@@ -325,6 +324,23 @@
   (42 dashboard total).
 </details>
 
+<details>
+<summary><strong>Client portal polish round 3 — session, safety, invite flow (DONE)</strong></summary>
+
+- **One auth round-trip per load:** layout guard + SessionProvider + Login's mounted-check all
+  share a memoized `fetchMe()` promise in `lib/session.tsx` (was 2–3 fetches on a cold load).
+  Cache invalidated via `resetSessionCache()` on sign-in/sign-up/sign-out and between tests
+  (setup.ts); Session.test pins exactly one `/api/auth/me` across deep links and SPA navigation.
+- **In-app discard confirmation:** leaving a dirty editor opens the shared Dialog (Keep editing /
+  Discard changes) instead of native `window.confirm`; clean back leaves immediately. Tests for
+  both states in ChatbotEditor.test.
+- **AcceptInvite to standard:** extracted `components/auth/fields.tsx` (Field, PasswordField with
+  show/hide, StrengthMeter, aria-describedby wiring) now shared by Login + AcceptInvite; errors
+  clear per keystroke; strength meter shown; confirm placeholder; post-success is SPA navigation
+  (cache-reset before routing). AcceptInvite.test: happy path posts token+password to better-auth's
+  reset-password endpoint, validation gating blocks submit, mismatch message, server-rejected link.
+</details>
+
 ## Known gaps / tech debt (honest)
 
 <details>
@@ -402,6 +418,10 @@ seeded — fresh installs start with a blank chatbot list.
 ## Commit trail (this rebuild)
 
 ```
+bdd2322 feat: accept-invite page reaches login-page standard — shared auth field components (fields.tsx), strength meter, keystroke-clearing errors, SPA hand-off
+f26ead8 design: in-app discard confirmation — Dialog replaces native window.confirm on dirty-editor back
+b7ec5bb perf: single /api/auth/me round-trip per load — memoized fetchMe() shared by guard/provider/login, invalidated on auth transitions
+0f0bcf3 docs: PROGRESS.md — polish rounds 1-2 snapshot, tests 118, commit trail synced to pushed history (stale uncommitted entries resolved); biome formatting touch-ups
 59e9e88 design: fresh-bot knowledge orientation — teaching intro card on empty Knowledge tab
 684495b fix: chatbot list rows no longer nest interactive buttons — open-editor button and pause/delete controls are siblings, stopPropagation hacks removed
 7566a16 feat: real overview counters — role-scoped GET /api/admin/stats (chatbotsTotal/Active, conversations, leads, messages) + live Overview cards, deep-linked recent rows
