@@ -359,4 +359,39 @@ describe('ChatbotEditor', () => {
     expect(screen.queryByLabelText('Clear all facts')).toBeNull()
     expect(screen.getByLabelText('Website URL to import')).toBeDefined()
   })
+
+  it('asks before discarding dirty edits on back, in-app', async () => {
+    editorStub()
+    const { currentPath } = renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Knowledge')
+    await screen.findByLabelText('About us')
+
+    fireEvent.change(screen.getByLabelText('About us'), {
+      target: { value: 'Family HVAC in Round Rock.' },
+    })
+    expect(screen.getByText('Unsaved changes')).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: /All chatbots/i }))
+    expect(await screen.findByRole('dialog')).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: /Keep editing/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    expect(currentPath()).toBe('/chatbots/ch_edit1')
+
+    fireEvent.click(screen.getByRole('button', { name: /All chatbots/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /Discard changes/i }))
+    expect(currentPath()).toBe('/chatbots')
+  })
+
+  it('leaves immediately on back when nothing is dirty', async () => {
+    editorStub()
+    const { currentPath } = renderAtLocation('/chatbots/ch_edit1')
+    await screen.findByText('Acme HVAC')
+
+    fireEvent.click(screen.getByRole('button', { name: /All chatbots/i }))
+    expect(currentPath()).toBe('/chatbots')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
 })

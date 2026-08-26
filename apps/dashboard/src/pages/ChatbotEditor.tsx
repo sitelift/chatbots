@@ -31,6 +31,7 @@ import { ModelPicker } from '../components/chatbot/ModelPicker'
 import { cleanFacts, type FormSetter, type FormState, toForm } from '../components/chatbot/state'
 import { WidgetFields } from '../components/chatbot/WidgetFields'
 import { WidgetSim } from '../components/chatbot/WidgetSim'
+import { Dialog } from '../components/Dialog'
 import { StatusBadge } from '../components/StatusBadge'
 import { type AdminApiError, apiFetch } from '../lib/api'
 import { useSession } from '../lib/session'
@@ -68,6 +69,7 @@ export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
   const [armedDelete, setArmedDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [tab, setTabState] = useState<Tab>('leads')
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
   const tabChosenRef = useRef(false)
 
   const isClient = user?.role === 'client'
@@ -78,7 +80,10 @@ export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
   const dirty = Boolean(form) && serializedForm !== baseline
 
   const onBack = () => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return
+    if (dirty) {
+      setConfirmDiscard(true)
+      return
+    }
     navigate({ to: '/chatbots' })
   }
   const onDeleted = () => navigate({ to: '/chatbots' })
@@ -352,6 +357,33 @@ export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
           </div>
         </div>
       )}
+
+      <Dialog
+        open={confirmDiscard}
+        onClose={() => setConfirmDiscard(false)}
+        title="Discard unsaved changes?"
+        description={`Your edits to ${view.name} haven't been saved yet.`}
+      >
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirmDiscard(false)}
+            className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            Keep editing
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmDiscard(false)
+              navigate({ to: '/chatbots' })
+            }}
+            className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-white transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-destructive"
+          >
+            Discard changes
+          </button>
+        </div>
+      </Dialog>
     </div>
   )
 }
