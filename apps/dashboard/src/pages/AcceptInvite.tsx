@@ -1,7 +1,9 @@
+import { useNavigate } from '@tanstack/react-router'
 import { Check, CircleAlert, LoaderCircle } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { PasswordField, StrengthMeter } from '../components/auth/fields'
 import { Logo } from '../components/Logo'
-import { inputClass, inputInvalidClass, labelClass } from '../lib/ui'
+import { resetSessionCache } from '../lib/session'
 
 interface FieldErrors {
   password?: string
@@ -9,7 +11,7 @@ interface FieldErrors {
 }
 
 export function AcceptInvitePage({ token }: { token: string }) {
-  const passwordRef = useRef<HTMLInputElement>(null)
+  const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
@@ -18,13 +20,22 @@ export function AcceptInvitePage({ token }: { token: string }) {
   const [done, setDone] = useState(false)
 
   useEffect(() => {
-    passwordRef.current?.focus()
+    document.getElementById('inv-password')?.focus()
   }, [])
+
+  function setField(field: keyof FieldErrors) {
+    return (value: string) => {
+      setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev))
+      if (field === 'password') setPassword(value)
+      else setConfirm(value)
+    }
+  }
 
   function validate(): boolean {
     const next: FieldErrors = {}
-    if (password.length < 10) next.password = 'At least 10 characters'
-    if (confirm !== password) next.confirm = 'Passwords do not match'
+    if (password.length < 10) next.password = 'Use at least 10 characters'
+    else if (!confirm) next.confirm = 'Confirm your password'
+    else if (confirm !== password) next.confirm = 'Passwords do not match'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -45,6 +56,7 @@ export function AcceptInvitePage({ token }: { token: string }) {
         setApiError(body.message ?? 'This setup link is invalid or expired')
         return
       }
+      resetSessionCache()
       setDone(true)
     } catch {
       setApiError('Could not reach the server. Try again.')
@@ -55,7 +67,7 @@ export function AcceptInvitePage({ token }: { token: string }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <div className="m-auto w-full max-w-[340px] px-6">
+      <main className="m-auto w-full max-w-[340px] px-6 py-12">
         <div className="flex items-center justify-center">
           <Logo className="h-7 w-auto text-foreground" />
         </div>
@@ -69,16 +81,17 @@ export function AcceptInvitePage({ token }: { token: string }) {
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               Your password is saved. Sign in to manage your chatbot.
             </p>
-            <a
-              href="/login"
-              className="mt-6 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            <button
+              type="button"
+              onClick={() => navigate({ to: '/login' })}
+              className="mt-6 inline-flex h-9 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               Go to sign in
-            </a>
+            </button>
           </div>
         ) : (
           <>
-            <h1 className="mt-8 text-center text-xl font-semibold tracking-tight">
+            <h1 className="mt-10 text-center text-xl font-semibold tracking-tight">
               Set your password
             </h1>
             <p className="mt-2 text-center text-sm leading-relaxed text-muted-foreground">
@@ -87,50 +100,31 @@ export function AcceptInvitePage({ token }: { token: string }) {
 
             <form onSubmit={(e) => void submit(e)} noValidate className="mt-8 space-y-4">
               <div>
-                <label htmlFor="inv-password" className={labelClass}>
-                  Password
-                </label>
-                <input
+                <PasswordField
                   id="inv-password"
-                  ref={passwordRef}
-                  type="password"
-                  autoComplete="new-password"
+                  label="Password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={setField('password')}
+                  error={errors.password}
                   placeholder="At least 10 characters"
-                  aria-invalid={Boolean(errors.password)}
-                  className={`${errors.password ? inputInvalidClass : inputClass} mt-1.5`}
-                />
-                {errors.password && (
-                  <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-                    <CircleAlert className="size-3" />
-                    {errors.password}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="inv-confirm" className={labelClass}>
-                  Confirm password
-                </label>
-                <input
-                  id="inv-confirm"
-                  type="password"
                   autoComplete="new-password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  aria-invalid={Boolean(errors.confirm)}
-                  className={`${errors.confirm ? inputInvalidClass : inputClass} mt-1.5`}
                 />
-                {errors.confirm && (
-                  <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-                    <CircleAlert className="size-3" />
-                    {errors.confirm}
-                  </p>
-                )}
+                {!errors.password && <StrengthMeter password={password} />}
               </div>
 
+              <PasswordField
+                id="inv-confirm"
+                label="Confirm password"
+                value={confirm}
+                onChange={setField('confirm')}
+                error={errors.confirm}
+                placeholder="Repeat your password"
+                autoComplete="new-password"
+              />
+
               {apiError && (
-                <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <p className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2 text-[13px] text-destructive">
+                  <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
                   {apiError}
                 </p>
               )}
@@ -138,7 +132,7 @@ export function AcceptInvitePage({ token }: { token: string }) {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
+                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary text-sm font-medium text-primary-foreground transition-opacity duration-150 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40"
               >
                 {submitting && <LoaderCircle className="size-3.5 animate-spin" />}
                 Save password
@@ -146,7 +140,8 @@ export function AcceptInvitePage({ token }: { token: string }) {
             </form>
           </>
         )}
-      </div>
+      </main>
+
       <p className="pb-8 text-center text-xs text-muted-foreground">
         Self-hosted · your data stays yours
       </p>
