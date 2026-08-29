@@ -2,12 +2,16 @@ import type { Server } from 'node:http'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { db } from '../src/db'
-import { messages } from '../src/db/schema'
+import { conversations, messages } from '../src/db/schema'
 import { createApp } from '../src/index'
+import { insertMessage } from '../src/services/conversations'
 import {
+  clearCompletionBodies,
   DEMO_CHATBOT_ID,
+  getCompletionBodies,
   seedDemoChatbot,
   setDefaultModel,
+  setMidStreamError,
   setStreamContent,
   startMockProvider,
 } from './helpers'
@@ -120,6 +124,86 @@ describe('JSON-wrapped model replies', () => {
     expect(persisted?.content).toBe('Around $2k to $5k.')
     setStreamContent('')
   })
+})
+
+describe('upstream mid-stream errors', () => {
+  it('emits an error frame and persists no assistant reply', async () => {
+    setMidStreamError('Provider disconnected unexpectedly')
+    try {
+      const res = await createApp().request(`/api/chat/${DEMO_CHATBOT_ID}/messages/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://example.com' },
+        body: JSON.stringify(payload),
+      })
+      expect(res.status).toBe(200)
+
+      const events = (await res.text())
+        .split('\n\n')
+        .filter(Boolean)
+        .map((frame) => ({
+          event: frame.match(/^event: (.+)$/m)?.[1],
+          data: JSON.parse(frame.match(/^data: (.+)$/m)?.[1] ?? '{}'),
+        }))
+
+      expect(events.at(-1)?.event).toBe('error')
+      expect(events.some((e) => e.event === 'token')).toBe(true)
+
+      const conversationId = events[0]?.data.conversationId as string
+      const persisted = db
+        .select()
+        .from(messages)
+        .where(eq(messages.conversationId, conversationId))
+        .all()
+      expect(persisted.every((m) => m.role === 'user')).toBe(true)
+    } finally {
+      setMidStreamError('')
+    }
+  })
+})
+
+describe('context window', () => {
+  it('sends the most recent messages, not the oldest', async () => {
+    db.delete(messages).where(eq(messages.conversationId, 'cv_history_test_01')).run()
+    db.delete(conversations).where(eq(conversations.id, 'cv_history_test_01')).run()
+    const [conv] = db
+      .insert(conversations)
+      .values({
+        id: 'cv_history_test_01',
+        chatbotId: DEMO_CHATBOT_ID,
+        visitorId: 'visitor_hist_01',
+      })
+      .returning()
+      .all()
+    for (let i = 1; i <= 25; i++) {
+      insertMessage(
+        conv?.id,
+        i % 2 === 1 ? 'user' : 'assistant',
+        `turn-${i}`,
+        undefined,
+        `msg_h${i}`,
+      )
+    }
+
+    clearCompletionBodies()
+    const res = await createApp().request(`/api/chat/${DEMO_CHATBOT_ID}/messages/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, conversationId: conv?.id }),
+    })
+    expect(res.status).toBe(200)
+    await res.text()
+
+    const mine = getCompletionBodies()
+      .map((b) => b.body.messages as { role: string; content: string }[])
+      .find((msgs) => msgs?.some((m) => m.content === 'turn-25'))
+    expect(mine).toBeDefined()
+    expect(mine?.length).toBe(21)
+    expect(mine?.[0]?.role).toBe('system')
+    expect(mine?.[1]?.content).toBe('turn-7')
+    expect(mine?.at(-2)?.content).toBe('turn-25')
+    expect(mine?.at(-1)?.content).toBe(payload.content)
+    expect(mine?.filter((m) => m.content === payload.content).length).toBe(1)
+  }, 15_000)
 })
 
 describe('public chatbot meta', () => {

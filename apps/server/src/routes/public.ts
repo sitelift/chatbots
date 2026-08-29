@@ -2,6 +2,7 @@ import {
   CONTEXT_MESSAGE_LIMIT,
   errorCodes,
   sendMessageRequestSchema,
+  submitHandoffRequestSchema,
   unwrapJsonReply,
 } from '@sitelift/shared'
 import { eq } from 'drizzle-orm'
@@ -18,7 +19,8 @@ import {
   getHistory,
   insertMessage,
 } from '../services/conversations'
-import { type ProviderOptions, streamCompletion } from '../services/provider'
+import { createPendingHandoff, HandoffError, submitHandoff } from '../services/handoffs'
+import { type ProviderOptions, ProviderStreamError, streamCompletion } from '../services/provider'
 import { resolveModel, resolveProviderCredentials } from '../services/settings'
 
 export class HttpError extends Error {
@@ -82,8 +84,8 @@ async function prepare(c: Context) {
     conversationId = createConversation(chatbotId, input.visitorId)
   }
 
-  const userMessageId = insertMessage(conversationId, 'user', input.content)
   const history = getHistory(conversationId, CONTEXT_MESSAGE_LIMIT - 1)
+  const userMessageId = insertMessage(conversationId, 'user', input.content)
   const credentials = resolveProviderCredentials()
 
   if (!credentials.apiKey) {
@@ -106,6 +108,8 @@ async function prepare(c: Context) {
     baseUrl: bot.baseUrl,
     temperature: bot.temperature,
     maxTokens: bot.maxTokens,
+    sessionId: conversationId,
+    enableHandoffTool: true,
   }
 
   return {
@@ -176,18 +180,35 @@ publicRoutes.post('/chat/:chatbotId/messages', async (c) => {
       credentials,
       () => {},
     )
-    const reply = unwrapJsonReply(result.text)
-    const messageId = insertMessage(conversationId, 'assistant', reply, {
+    const reply =
+      unwrapJsonReply(result.text) ||
+      (result.handoff
+        ? (result.handoff.args.intro ?? 'Share your details and someone will follow up.')
+        : '')
+    const messageId = insertMessage(conversationId, 'assistant', reply || ' ', {
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
     })
-    return c.json({ conversationId, messageId, reply })
+    const body: Record<string, unknown> = { conversationId, messageId, reply }
+    if (result.handoff) {
+      const pending = createPendingHandoff(conversationId, bot.id, result.handoff.args)
+      body.handoff = {
+        handoffId: pending.handoffId,
+        reason: pending.reason,
+        intro: pending.intro,
+        fields: pending.fields,
+      }
+    }
+    return c.json(body)
   } catch (err) {
     return handleError(c, err)
   }
 })
 
 publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
+  const startedAt = performance.now()
+  let firstTokenE2eMs: number | null = null
+
   let prepared: Awaited<ReturnType<typeof prepare>>
   try {
     prepared = await prepare(c)
@@ -200,6 +221,8 @@ publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
 
   c.header('X-Accel-Buffering', 'no')
   for (const [k, v] of Object.entries(sseHeaders())) c.header(k, v)
+
+  const clientSignal = c.req.raw.signal
 
   return stream(c, async (s) => {
     await s.write(sseFrame({ event: 'meta', conversationId, messageId: userMessageId }))
@@ -216,25 +239,112 @@ publicRoutes.post('/chat/:chatbotId/messages/stream', async (c) => {
         providerOptions,
         credentials,
         (text) => {
+          if (firstTokenE2eMs === null) {
+            firstTokenE2eMs = Math.round(performance.now() - startedAt)
+          }
           void s.write(sseFrame({ event: 'token', text }))
         },
+        clientSignal,
       )
       usage = {
         promptTokens: result.promptTokens,
         completionTokens: result.completionTokens,
       }
     } catch (err) {
-      logger.error({ err }, 'provider stream failed')
-      const code =
-        (err as Error & { code?: string }).code === errorCodes.AI_KEY_NOT_CONFIGURED
-          ? errorCodes.AI_KEY_NOT_CONFIGURED
-          : errorCodes.AI_PROVIDER_ERROR
-      await s.write(sseFrame({ event: 'error', code, message: 'AI provider error' }))
+      if (err instanceof ProviderStreamError && err.code === 'CLIENT_CLOSED') {
+        logger.info({ chatbotId: bot.id, conversationId }, 'chat stream aborted by visitor')
+        return
+      }
+      if (!clientSignal.aborted) {
+        logger.error({ err }, 'provider stream failed')
+        const code =
+          (err as Error & { code?: string }).code === errorCodes.AI_KEY_NOT_CONFIGURED
+            ? errorCodes.AI_KEY_NOT_CONFIGURED
+            : errorCodes.AI_PROVIDER_ERROR
+        try {
+          await s.write(
+            sseFrame({
+              event: 'error',
+              code,
+              message: err instanceof ProviderStreamError ? err.message : 'AI provider error',
+            }),
+          )
+        } catch {}
+      }
       return
     }
 
-    const reply = unwrapJsonReply(result!.text)
-    const assistantMessageId = insertMessage(conversationId, 'assistant', reply, usage)
+    if (result?.handoff) {
+      const pending = createPendingHandoff(conversationId, bot.id, result.handoff.args)
+      await s.write(
+        sseFrame({
+          event: 'handoff',
+          handoffId: pending.handoffId,
+          reason: pending.reason,
+          intro: pending.intro,
+          fields: pending.fields,
+        }),
+      )
+    }
+
+    const reply =
+      unwrapJsonReply(result?.text) ||
+      (result?.handoff
+        ? (result.handoff.args.intro ?? 'Share your details and someone will follow up.')
+        : '')
+    const assistantMessageId = insertMessage(conversationId, 'assistant', reply || ' ', usage)
     await s.write(sseFrame({ event: 'done', conversationId, messageId: assistantMessageId, reply }))
+
+    logger.info(
+      {
+        chatbotId: bot.id,
+        conversationId,
+        model: providerOptions.model,
+        upstreamProvider: result?.upstreamProvider,
+        firstTokenE2eMs,
+        totalE2eMs: Math.round(performance.now() - startedAt),
+        promptTokens: result?.promptTokens,
+        cachedTokens: result?.cachedTokens,
+        costUsd: result?.costUsd,
+        chars: result?.text.length,
+        handoff: Boolean(result?.handoff),
+      },
+      'chat stream served',
+    )
   })
+})
+
+publicRoutes.post('/chat/:chatbotId/handoff', async (c) => {
+  try {
+    const chatbotId = c.req.param('chatbotId')
+    if (!chatbotId) {
+      throw new HttpError(404, errorCodes.NOT_FOUND, 'Chatbot not found')
+    }
+    const bot = await loadActiveChatbot(chatbotId)
+    const origin = c.req.header('Origin') ?? c.req.header('Referer')
+    if (!originAllowed(bot.allowedDomains, origin)) {
+      throw new HttpError(403, errorCodes.FORBIDDEN_ORIGIN, 'Embedding domain not allowed')
+    }
+
+    const parsed = submitHandoffRequestSchema.safeParse(await c.req.json())
+    if (!parsed.success) {
+      throw new HttpError(400, errorCodes.INVALID_CONTENT, 'Invalid handoff payload')
+    }
+
+    submitHandoff({
+      chatbotId,
+      conversationId: parsed.data.conversationId,
+      visitorId: parsed.data.visitorId,
+      handoffId: parsed.data.handoffId,
+      answers: parsed.data.answers,
+      botName: bot.name,
+    })
+    return c.json({ ok: true as const })
+  } catch (err) {
+    if (err instanceof HandoffError) {
+      const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'ALREADY_SUBMITTED' ? 409 : 400
+      return c.json({ error: { code: err.code, message: err.message } }, status)
+    }
+    return handleError(c, err)
+  }
 })

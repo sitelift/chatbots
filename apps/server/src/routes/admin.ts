@@ -2,15 +2,19 @@ import {
   type BusinessFacts,
   type ChatbotAdminView,
   type ClientUserView,
+  CONTEXT_MESSAGE_LIMIT,
   chatbotInputSchema,
+  chatbotTestHandoffSchema,
   chatbotTestSchema,
   clientUserViewSchema,
   composeSystemPrompt,
   createClientSchema,
+  type HandoffField,
   importRequestSchema,
+  isRoutingMode,
   unwrapJsonReply,
 } from '@sitelift/shared'
-import { and, desc, eq, gte, inArray, isNotNull, like, or } from 'drizzle-orm'
+import { and, eq, gte, inArray, like } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import { db } from '../db'
@@ -26,8 +30,18 @@ import { newId, newToken } from '../lib/ids'
 import { logger } from '../lib/logger'
 import { CatalogError, fetchModelCatalog } from '../lib/modelCatalog'
 import { type RequestUser, requireRole } from '../lib/session'
+import {
+  createConversation,
+  findConversation,
+  getConversationThread,
+  getHistory,
+  insertMessage,
+  listConversations,
+} from '../services/conversations'
+import { createPendingHandoff, HandoffError, submitHandoff } from '../services/handoffs'
 import { extractBusinessFacts, fetchSiteText, ImportError } from '../services/importer'
-import { completePlain } from '../services/provider'
+import { sendSmtpTestEmail } from '../services/mailer'
+import { completeWithTools } from '../services/provider'
 import {
   getAdminSettingsView,
   getDefaultModel,
@@ -38,6 +52,8 @@ import {
   saveBaseUrl,
   saveDefaultModel,
   saveProviderPin,
+  saveRoutingMode,
+  saveSmtpSettings,
 } from '../services/settings'
 
 type AdminContext = { Variables: { user: RequestUser } }
@@ -48,6 +64,7 @@ adminRoutes.use('*', requireRole('agency', 'client'))
 adminRoutes.use('/clients', requireRole('agency'))
 adminRoutes.use('/clients/*', requireRole('agency'))
 adminRoutes.use('/settings', requireRole('agency'))
+adminRoutes.use('/settings/*', requireRole('agency'))
 adminRoutes.use('/import', requireRole('agency'))
 adminRoutes.use('/models', requireRole('agency'))
 
@@ -392,7 +409,7 @@ adminRoutes.post('/chatbots/:id/test', async (c) => {
       400,
     )
   }
-  const { content, facts } = parsed.data
+  const { content, facts, history = [], dryRun } = parsed.data
   const systemPrompt = composeSystemPrompt(facts)
   if (!systemPrompt) {
     return c.json(
@@ -419,20 +436,91 @@ adminRoutes.post('/chatbots/:id/test', async (c) => {
     } catch (err) {
       return settingsError(c, err)
     }
-    const reply = await completePlain(
+
+    let conversationId = parsed.data.conversationId
+    let visitorId = parsed.data.visitorId
+    let prior = history
+
+    if (!dryRun) {
+      visitorId = visitorId ?? `test_${user.id.slice(0, 24)}`
+      if (conversationId) {
+        const existing = await findConversation(row.id, conversationId)
+        if (!existing || existing.visitorId !== visitorId) {
+          return c.json(
+            { error: { code: 'NOT_FOUND', message: 'Test conversation not found' } },
+            404,
+          )
+        }
+      } else {
+        conversationId = createConversation(row.id, visitorId)
+      }
+      prior = getHistory(conversationId, CONTEXT_MESSAGE_LIMIT - 1).map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }))
+      insertMessage(conversationId, 'user', content)
+    }
+
+    const result = await completeWithTools(
       [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content },
+        { role: 'system' as const, content: systemPrompt },
+        ...prior.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+        { role: 'user' as const, content },
       ],
       {
         model,
         baseUrl: row.baseUrl,
         temperature: row.temperature,
         maxTokens: row.maxTokens,
+        enableHandoffTool: true,
+        sessionId: conversationId,
       },
       credentials,
     )
-    return c.json({ reply: unwrapJsonReply(reply) })
+    const reply =
+      unwrapJsonReply(result.text) ||
+      (result.handoff
+        ? (result.handoff.args.intro ?? 'Share your details and someone will follow up.')
+        : '')
+
+    if (!dryRun && conversationId) {
+      insertMessage(conversationId, 'assistant', reply || ' ', {
+        promptTokens: null,
+        completionTokens: null,
+      })
+    }
+
+    const body: {
+      reply: string
+      conversationId?: string
+      visitorId?: string
+      handoff?: {
+        handoffId: string
+        reason: string
+        intro?: string
+        fields: HandoffField[]
+      }
+    } = { reply, conversationId, visitorId }
+
+    if (result.handoff) {
+      if (!dryRun && conversationId) {
+        const pending = createPendingHandoff(conversationId, row.id, result.handoff.args)
+        body.handoff = {
+          handoffId: pending.handoffId,
+          reason: pending.reason,
+          intro: pending.intro,
+          fields: pending.fields,
+        }
+      } else {
+        body.handoff = {
+          handoffId: `preview_${Date.now()}`,
+          reason: result.handoff.args.reason,
+          intro: result.handoff.args.intro,
+          fields: result.handoff.args.fields,
+        }
+      }
+    }
+    return c.json(body)
   } catch (err) {
     logger.error({ err }, 'chatbot test failed')
     return c.json(
@@ -442,51 +530,80 @@ adminRoutes.post('/chatbots/:id/test', async (c) => {
   }
 })
 
+adminRoutes.post('/chatbots/:id/test/handoff', async (c) => {
+  const user = c.get('user')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
+  if (!row || !user || !(await hasBotAccess(user, row.id))) {
+    return notFound(c)
+  }
+  const parsed = chatbotTestHandoffSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: {
+          code: 'INVALID_INPUT',
+          message: parsed.error.issues[0]?.message ?? 'Invalid handoff payload',
+        },
+      },
+      400,
+    )
+  }
+  if (parsed.data.dryRun || parsed.data.handoffId.startsWith('preview_')) {
+    return c.json({ ok: true as const })
+  }
+  try {
+    submitHandoff({
+      chatbotId: row.id,
+      conversationId: parsed.data.conversationId,
+      visitorId: parsed.data.visitorId,
+      handoffId: parsed.data.handoffId,
+      answers: parsed.data.answers,
+      botName: row.name,
+    })
+    return c.json({ ok: true as const })
+  } catch (err) {
+    if (err instanceof HandoffError) {
+      const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'ALREADY_SUBMITTED' ? 409 : 400
+      return c.json({ error: { code: err.code, message: err.message } }, status)
+    }
+    logger.error({ err }, 'test handoff failed')
+    return c.json({ error: { code: 'INTERNAL', message: 'Could not submit handoff' } }, 500)
+  }
+})
+
 adminRoutes.get('/chatbots/:id/leads', async (c) => {
   const user = c.get('user')
   const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
   if (!row || !user || !(await hasBotAccess(user, row.id))) {
     return notFound(c)
   }
-  const convs = db
-    .select()
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.chatbotId, row.id),
-        or(isNotNull(conversations.visitorName), isNotNull(conversations.visitorEmail)),
-      ),
-    )
-    .orderBy(desc(conversations.createdAt))
-    .limit(25)
-    .all()
-
-  const conversationIds = convs.map((c) => c.id)
-  const rows = conversationIds.length
-    ? db.select().from(messages).where(inArray(messages.conversationId, conversationIds)).all()
-    : []
-
-  const counts = new Map<string, number>()
-  const lastByConv = new Map<string, { content: string; at: number }>()
-  for (const m of rows) {
-    counts.set(m.conversationId, (counts.get(m.conversationId) ?? 0) + 1)
-    const at = m.createdAt.getTime()
-    const current = lastByConv.get(m.conversationId)
-    if (!current || at > current.at) {
-      lastByConv.set(m.conversationId, { content: m.content, at })
-    }
-  }
-
-  const leads = convs.map((c) => ({
-    id: c.id,
-    visitorName: c.visitorName,
-    visitorEmail: c.visitorEmail,
-    lastMessage: lastByConv.get(c.id)?.content ?? '',
-    messageCount: counts.get(c.id) ?? 0,
-    createdAt: c.createdAt.toISOString(),
-  }))
-
+  const items = listConversations(row.id, { filter: 'leads', limit: 25 })
+  const leads = items.map(({ isLead: _isLead, ...lead }) => lead)
   return c.json({ leads })
+})
+
+adminRoutes.get('/chatbots/:id/conversations', async (c) => {
+  const user = c.get('user')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
+  if (!row || !user || !(await hasBotAccess(user, row.id))) {
+    return notFound(c)
+  }
+  const filterRaw = c.req.query('filter') ?? 'all'
+  const filter = filterRaw === 'leads' ? 'leads' : 'all'
+  const requested = Number.parseInt(c.req.query('limit') ?? '50', 10)
+  const limit = Number.isFinite(requested) && requested > 0 ? requested : 50
+  return c.json({ conversations: listConversations(row.id, { filter, limit }) })
+})
+
+adminRoutes.get('/chatbots/:id/conversations/:conversationId', async (c) => {
+  const user = c.get('user')
+  const row = await db.query.chatbots.findFirst({ where: eq(chatbots.id, c.req.param('id')) })
+  if (!row || !user || !(await hasBotAccess(user, row.id))) {
+    return notFound(c)
+  }
+  const thread = getConversationThread(row.id, c.req.param('conversationId'))
+  if (!thread) return notFound(c)
+  return c.json(thread)
 })
 
 function dayKey(date: Date): string {
@@ -574,6 +691,16 @@ adminRoutes.put('/settings', async (c) => {
       baseUrl?: string
       defaultModel?: string
       providerPin?: string
+      routingMode?: string
+      smtp?: {
+        host?: string
+        port?: number
+        secure?: boolean
+        user?: string
+        pass?: string
+        from?: string
+        alsoNotify?: string
+      }
     }
     if (body.apiKey !== undefined && body.apiKey.trim() !== '') {
       saveApiKey(body.apiKey.trim(), body.baseUrl)
@@ -582,9 +709,49 @@ adminRoutes.put('/settings', async (c) => {
     }
     if (body.defaultModel !== undefined) saveDefaultModel(body.defaultModel)
     if (body.providerPin !== undefined) saveProviderPin(body.providerPin)
+    if (body.routingMode !== undefined) {
+      if (!isRoutingMode(body.routingMode)) {
+        return c.json({ error: { code: 'INVALID_INPUT', message: 'Unknown routing mode' } }, 400)
+      }
+      saveRoutingMode(body.routingMode)
+    }
+    if (body.smtp !== undefined) {
+      saveSmtpSettings({
+        host: body.smtp.host,
+        port: body.smtp.port,
+        secure: body.smtp.secure,
+        user: body.smtp.user,
+        pass: body.smtp.pass,
+        from: body.smtp.from,
+        alsoNotify: body.smtp.alsoNotify,
+      })
+    }
     return c.json(getAdminSettingsView())
   } catch (err) {
     return settingsError(c, err)
+  }
+})
+
+adminRoutes.post('/settings/smtp/test', async (c) => {
+  const me = c.get('user')
+  const to = me?.email
+  if (!to) {
+    return c.json({ error: { code: 'INVALID_INPUT', message: 'No email on your account' } }, 400)
+  }
+  try {
+    await sendSmtpTestEmail(to)
+    return c.json({ ok: true, to })
+  } catch (err) {
+    logger.error({ err }, 'smtp test failed')
+    return c.json(
+      {
+        error: {
+          code: 'SMTP_ERROR',
+          message: err instanceof Error ? err.message : 'Could not send test email',
+        },
+      },
+      502,
+    )
   }
 })
 

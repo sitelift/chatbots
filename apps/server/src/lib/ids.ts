@@ -4,6 +4,7 @@ const prefixes = {
   chatbot: 'ch',
   conversation: 'cv',
   message: 'msg',
+  handoff: 'ho',
   user: 'usr',
   account: 'ac',
   verification: 'ver',

@@ -178,14 +178,44 @@ describe('admin settings API', () => {
     expect(resolveProviderCredentials().providerPin).toBe('')
   })
 
-  it('pins requests to a provider only for OpenRouter base URLs', () => {
+  it('stores and resets the OpenRouter routing mode', async () => {
+    const put = await createApp().request('/api/admin/settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ routingMode: 'latency' }),
+    })
+    expect(put.status).toBe(200)
+    expect((await put.json()).routingMode).toBe('latency')
+
+    const bad = await createApp().request('/api/admin/settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ routingMode: 'fastest-possible' }),
+    })
+    expect(bad.status).toBe(400)
+
+    const cleared = await createApp().request('/api/admin/settings', {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ routingMode: 'auto' }),
+    })
+    expect(cleared.status).toBe(200)
+    expect((await cleared.json()).routingMode).toBe('auto')
+  })
+
+  it('pins requests to a provider only when routing mode is "pin" on OpenRouter', () => {
     const options = { model: 'test-mini', temperature: 0 }
     const messages = [{ role: 'user' as const, content: 'hi' }]
     const withPin = requestBody(
       options,
       messages,
       {},
-      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1', providerPin: 'deepseek' },
+      {
+        apiKey: 'k',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        providerPin: 'deepseek',
+        routingMode: 'pin',
+      },
     )
     expect(JSON.parse(withPin).provider).toEqual({
       only: ['deepseek'],
@@ -196,17 +226,133 @@ describe('admin settings API', () => {
       options,
       messages,
       {},
-      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1' },
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1', routingMode: 'pin' },
     )
     expect(JSON.parse(withoutPin).provider).toBeUndefined()
+
+    const unpinnedMode = requestBody(
+      options,
+      messages,
+      {},
+      {
+        apiKey: 'k',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        providerPin: 'deepseek',
+        routingMode: 'auto',
+      },
+    )
+    expect(JSON.parse(unpinnedMode).provider).toBeUndefined()
 
     const nonOpenRouter = requestBody(
       options,
       messages,
       {},
-      { apiKey: 'k', baseUrl: 'https://api.openai.com/v1', providerPin: 'deepseek' },
+      {
+        apiKey: 'k',
+        baseUrl: 'https://api.openai.com/v1',
+        providerPin: 'deepseek',
+        routingMode: 'pin',
+      },
     )
     expect(JSON.parse(nonOpenRouter).provider).toBeUndefined()
+  })
+
+  it('sorts by latency or throughput instead of price-weighted load balancing', () => {
+    const options = { model: 'test-mini', temperature: 0 }
+    const messages = [{ role: 'user' as const, content: 'hi' }]
+    const byLatency = requestBody(
+      options,
+      messages,
+      {},
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1', routingMode: 'latency' },
+    )
+    expect(JSON.parse(byLatency).provider).toEqual({ sort: 'latency' })
+    const byThroughput = requestBody(
+      options,
+      messages,
+      {},
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1', routingMode: 'throughput' },
+    )
+    expect(JSON.parse(byThroughput).provider).toEqual({ sort: 'throughput' })
+    const auto = requestBody(
+      options,
+      messages,
+      {},
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1', routingMode: 'auto' },
+    )
+    expect(JSON.parse(auto).provider).toBeUndefined()
+  })
+
+  it('suppresses thinking with the dialect each provider expects', () => {
+    const orOptions = { model: 'openai/gpt-4o-mini', temperature: 0 }
+    const or = requestBody(
+      orOptions,
+      [],
+      {},
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1' },
+    )
+    expect(JSON.parse(or).reasoning).toEqual({ effort: 'none' })
+
+    const lockedModel = requestBody(
+      { model: 'deepseek/deepseek-r1', temperature: 0 },
+      [],
+      {},
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1' },
+    )
+    expect(JSON.parse(lockedModel).reasoning).toBeUndefined()
+
+    const openaiReasoning = requestBody(
+      { model: 'gpt-5-mini', temperature: 0 },
+      [],
+      {},
+      { apiKey: 'k', baseUrl: 'https://api.openai.com/v1' },
+    )
+    expect(JSON.parse(openaiReasoning).reasoning_effort).toBe('minimal')
+
+    const openaiNonReasoning = requestBody(
+      { model: 'gpt-4o-mini', temperature: 0 },
+      [],
+      {},
+      { apiKey: 'k', baseUrl: 'https://api.openai.com/v1' },
+    )
+    expect(JSON.parse(openaiNonReasoning).reasoning_effort).toBeUndefined()
+    expect(JSON.parse(openaiNonReasoning).reasoning).toBeUndefined()
+
+    const groq = requestBody(
+      { model: 'llama-3.3-70b-versatile', temperature: 0 },
+      [],
+      {},
+      { apiKey: 'k', baseUrl: 'https://api.groq.com/openai/v1' },
+    )
+    expect(JSON.parse(groq).reasoning).toBeUndefined()
+  })
+
+  it('sends a sticky-cache session id per provider dialect', () => {
+    const or = requestBody(
+      { model: 'openai/gpt-4o-mini', temperature: 0, sessionId: 'cv_123' },
+      [],
+      {},
+      { apiKey: 'k', baseUrl: 'https://openrouter.ai/api/v1' },
+    )
+    expect(JSON.parse(or).session_id).toBe('cv_123')
+
+    const openai = requestBody(
+      { model: 'gpt-4o-mini', temperature: 0, sessionId: 'cv_123' },
+      [],
+      {},
+      { apiKey: 'k', baseUrl: 'https://api.openai.com/v1' },
+    )
+    expect(JSON.parse(openai).prompt_cache_key).toBe('cv_123')
+    expect(JSON.parse(openai).session_id).toBeUndefined()
+
+    const other = requestBody(
+      { model: 'test-mini', temperature: 0, sessionId: 'cv_123' },
+      [],
+      {},
+      { apiKey: 'k', baseUrl: 'http://127.0.0.1:4107/v1' },
+    )
+    expect(JSON.parse(other).session_id).toBeUndefined()
+    expect(JSON.parse(other).prompt_cache_key).toBeUndefined()
   })
 
   it('rejects chat with a clear error when no model is configured anywhere', async () => {
@@ -223,6 +369,50 @@ describe('admin settings API', () => {
       expect(body.error.message).toContain('Set a default model in Settings')
     } finally {
       setDefaultModel('test-mini')
+    }
+  })
+
+  it('stores SMTP settings encrypted and can send a test email', async () => {
+    const { setMailTransportForTests } = await import('../src/services/mailer')
+    const sent: string[] = []
+    setMailTransportForTests({
+      sendMail: async (opts) => {
+        sent.push(opts.to)
+        return {}
+      },
+    })
+    try {
+      const put = await createApp().request('/api/admin/settings', {
+        method: 'PUT',
+        headers: headers(),
+        body: JSON.stringify({
+          smtp: {
+            host: 'smtp.example.com',
+            port: 465,
+            secure: true,
+            user: 'mailer',
+            pass: 'smtp-secret-9999',
+            from: 'leads@example.com',
+            alsoNotify: 'ops@example.com',
+          },
+        }),
+      })
+      expect(put.status).toBe(200)
+      const view = await put.json()
+      expect(view.smtp.configured).toBe(true)
+      expect(view.smtp.hasPass).toBe(true)
+      expect(view.smtp.passHint).toBe('9999')
+      expect(JSON.stringify(view)).not.toContain('smtp-secret-9999')
+
+      const test = await createApp().request('/api/admin/settings/smtp/test', {
+        method: 'POST',
+        headers: headers(),
+        body: '{}',
+      })
+      expect(test.status).toBe(200)
+      expect(sent).toEqual([agency.email])
+    } finally {
+      setMailTransportForTests(null)
     }
   })
 })

@@ -5,7 +5,7 @@ import { chatbots } from '../src/db/schema'
 import { resolveProviderCredentials } from '../src/services/settings'
 
 const bot = db.select().from(chatbots).where(eq(chatbots.id, 'ch_demo')).get()
-if (!bot || !bot.factsJson) throw new Error('no demo bot / facts')
+if (!bot?.factsJson) throw new Error('no demo bot / facts')
 const prompt = composeSystemPrompt(JSON.parse(bot.factsJson))
 const creds = resolveProviderCredentials()
 const question = process.argv[2] ?? 'How much does a website cost?'

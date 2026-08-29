@@ -177,8 +177,8 @@ describe('ownership-scoped chatbot access', () => {
   })
 })
 
-describe('scoping on stats, leads and test', () => {
-  it('serves leads/stats for assigned bots only', async () => {
+describe('scoping on stats, leads, conversations and test', () => {
+  it('serves leads/stats/conversations for assigned bots only', async () => {
     const leads = await asClient(`/api/admin/chatbots/${DEMO_CHATBOT_ID}/leads`)
     expect(leads.status).toBe(200)
     expect(((await leads.json()) as { leads: unknown[] }).leads).toEqual([])
@@ -188,11 +188,25 @@ describe('scoping on stats, leads and test', () => {
     const statsBody = (await stats.json()) as { windowDays: number }
     expect(statsBody.windowDays).toBeGreaterThan(0)
 
+    const convs = await asClient(`/api/admin/chatbots/${DEMO_CHATBOT_ID}/conversations`)
+    expect(convs.status).toBe(200)
+    expect(
+      Array.isArray(((await convs.json()) as { conversations: unknown[] }).conversations),
+    ).toBe(true)
+
     const deniedLeads = await asClient(`/api/admin/chatbots/${otherBotId}/leads`)
     expect(deniedLeads.status).toBe(404)
 
     const deniedStats = await asClient(`/api/admin/chatbots/${otherBotId}/stats`)
     expect(deniedStats.status).toBe(404)
+
+    const deniedConvs = await asClient(`/api/admin/chatbots/${otherBotId}/conversations`)
+    expect(deniedConvs.status).toBe(404)
+
+    const deniedThread = await asClient(
+      `/api/admin/chatbots/${otherBotId}/conversations/cv_anything`,
+    )
+    expect(deniedThread.status).toBe(404)
   })
 
   it('serves draft-facts testing for assigned bots only', async () => {

@@ -90,20 +90,70 @@ export function getLastModelsAuthHeader(): string | null {
 }
 
 let jsonCompletionContent = ''
-let lastCompletionMessages: Array<{ role: string; content: string }> = []
+let completionBodies: Array<{ at: number; body: Record<string, unknown> }> = []
+
+export function getCompletionBodies(): Array<{ at: number; body: Record<string, unknown> }> {
+  return completionBodies
+}
+
+export function clearCompletionBodies(): void {
+  completionBodies = []
+}
+
+export function getLastCompletionBody(): Record<string, unknown> | null {
+  return completionBodies.at(-1)?.body ?? null
+}
 
 export function setJsonCompletionContent(content: string): void {
   jsonCompletionContent = content
 }
 
 let streamContent = ''
+let streamToolCall: { name: string; arguments: string } | null = null
 
 export function setStreamContent(content: string): void {
   streamContent = content
+  midStreamError = null
+  streamToolCall = null
+}
+
+export function setStreamToolCall(name: string, args: Record<string, unknown>): void {
+  streamToolCall = { name, arguments: JSON.stringify(args) }
+  streamContent = ''
+  midStreamError = null
+}
+
+let midStreamError: string | null = null
+
+export function setMidStreamError(message: string): void {
+  midStreamError = message
+  streamToolCall = null
+}
+
+export function setBaseUrl(url: string): void {
+  if (url) setSetting('ai_base_url', url)
+  else clearSetting('ai_base_url')
+}
+
+export function setRoutingMode(mode: string): void {
+  if (mode) setSetting('ai_routing_mode', mode)
+  else clearSetting('ai_routing_mode')
+}
+
+function setSetting(key: string, value: string): void {
+  db.insert(settings)
+    .values({ key, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } })
+    .run()
+}
+
+function clearSetting(key: string): void {
+  db.delete(settings).where(eq(settings.key, key)).run()
 }
 
 export function getLastCompletionMessages(): Array<{ role: string; content: string }> {
-  return lastCompletionMessages
+  const last = getLastCompletionBody()
+  return (last?.messages as Array<{ role: string; content: string }> | undefined) ?? []
 }
 
 export function startMockProvider(
@@ -138,12 +188,31 @@ export function startMockProvider(
         let body = ''
         for await (const chunk of req) body += chunk
         try {
-          lastCompletionMessages =
-            (JSON.parse(body) as { messages?: { role: string; content: string }[] }).messages ?? []
+          const parsed = JSON.parse(body) as Record<string, unknown>
+          completionBodies.push({ at: Date.now(), body: parsed })
+          const wantsStream = Boolean(parsed.stream)
+          if (!wantsStream) {
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            const message: Record<string, unknown> = {
+              role: 'assistant',
+              content: jsonCompletionContent || (streamToolCall ? '' : 'Hello world'),
+            }
+            if (streamToolCall) {
+              message.tool_calls = [
+                {
+                  id: 'call_test',
+                  type: 'function',
+                  function: streamToolCall,
+                },
+              ]
+            }
+            res.end(JSON.stringify({ choices: [{ message }] }))
+            return
+          }
         } catch {
-          lastCompletionMessages = []
+          completionBodies.push({ at: Date.now(), body: {} })
         }
-        if (jsonCompletionContent) {
+        if (jsonCompletionContent && !streamToolCall) {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(
             JSON.stringify({
@@ -153,6 +222,58 @@ export function startMockProvider(
           return
         }
         res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+        if (streamToolCall) {
+          const args = streamToolCall.arguments
+          const mid = Math.max(1, Math.floor(args.length / 2))
+          res.write(
+            `data: ${JSON.stringify({
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: 'call_test',
+                        type: 'function',
+                        function: { name: streamToolCall.name, arguments: '' },
+                      },
+                    ],
+                  },
+                },
+              ],
+            })}\n\n`,
+          )
+          res.write(
+            `data: ${JSON.stringify({
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [{ index: 0, function: { arguments: args.slice(0, mid) } }],
+                  },
+                },
+              ],
+            })}\n\n`,
+          )
+          res.write(
+            `data: ${JSON.stringify({
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [{ index: 0, function: { arguments: args.slice(mid) } }],
+                  },
+                },
+              ],
+            })}\n\n`,
+          )
+          res.write(
+            `data: ${JSON.stringify({
+              choices: [{ delta: {}, finish_reason: 'tool_calls' }],
+            })}\n\n`,
+          )
+          res.write('data: [DONE]\n\n')
+          res.end()
+          return
+        }
         const chunks = streamContent
           ? streamContent.split(/(?<=\s)/)
           : [
@@ -165,6 +286,16 @@ export function startMockProvider(
           const frame =
             typeof chunk === 'string' ? { choices: [{ delta: { content: chunk } }] } : chunk
           res.write(`data: ${JSON.stringify(frame)}\n\n`)
+        }
+        if (midStreamError) {
+          res.write(
+            `data: ${JSON.stringify({
+              error: { message: midStreamError },
+              choices: [{ delta: { content: '' }, finish_reason: 'error' }],
+            })}\n\n`,
+          )
+          res.end()
+          return
         }
         res.write('data: [DONE]\n\n')
         res.end()

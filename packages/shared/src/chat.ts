@@ -22,6 +22,20 @@ export const sseEventSchema = z.discriminatedUnion('event', [
     text: z.string(),
   }),
   z.object({
+    event: z.literal('handoff'),
+    handoffId: z.string(),
+    reason: z.string(),
+    intro: z.string().optional(),
+    fields: z.array(
+      z.object({
+        id: z.string(),
+        type: z.enum(['name', 'email', 'phone', 'text', 'textarea']),
+        label: z.string(),
+        required: z.boolean().optional(),
+      }),
+    ),
+  }),
+  z.object({
     event: z.literal('done'),
     conversationId: z.string(),
     messageId: z.string(),
@@ -59,7 +73,8 @@ export function unwrapJsonReply(text: string): string {
     }
     const keys = Object.keys(parsed)
     if (keys.length === 1) {
-      const value = parsed[keys[0]!]
+      const key = keys[0]
+      const value = key === undefined ? undefined : parsed[key]
       if (typeof value === 'string') return value
     }
   } catch {}

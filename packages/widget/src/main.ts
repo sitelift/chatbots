@@ -22,6 +22,20 @@ interface StoredIds {
   visitorId: string
 }
 
+interface HandoffField {
+  id: string
+  type: 'name' | 'email' | 'phone' | 'text' | 'textarea'
+  label: string
+  required?: boolean
+}
+
+interface HandoffPayload {
+  handoffId: string
+  reason: string
+  intro?: string
+  fields: HandoffField[]
+}
+
 const PANEL_WIDTH = 400
 
 function readConfig(): WidgetConfig | null {
@@ -177,6 +191,31 @@ function styles(): string {
       align-self: flex-start; max-width: 92%; padding: 10px 14px; border-radius: 12px;
       font-size: 13px; line-height: 1.45; color: #b3261e; background: #fef2f2;
     }
+    .handoff {
+      align-self: stretch; border: 1px solid #e4e4e7; border-radius: 14px;
+      padding: 14px; background: #fafafa; animation: sl-rise 200ms cubic-bezier(0.25, 1, 0.5, 1);
+    }
+    .handoff-intro { font-size: 13px; line-height: 1.45; color: #3f3f46; margin-bottom: 12px; }
+    .handoff-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+    .handoff-field label { font-size: 12px; font-weight: 500; color: #52525b; }
+    .handoff-field input, .handoff-field textarea {
+      border: 1px solid #e4e4e7; background: #ffffff; border-radius: 10px;
+      padding: 9px 11px; font-size: 14px; color: #18181b; outline: none;
+      font-family: inherit; resize: vertical;
+    }
+    .handoff-field input:focus-visible, .handoff-field textarea:focus-visible {
+      border-color: var(--sl-brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sl-brand) 14%, transparent);
+    }
+    .handoff-field textarea { min-height: 64px; }
+    .handoff-error { font-size: 12px; color: #b3261e; margin: -4px 0 8px; }
+    .handoff-submit {
+      width: 100%; border: none; border-radius: 10px; padding: 10px 14px; margin-top: 4px;
+      background: var(--sl-brand); color: var(--sl-on-brand); font-size: 14px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+    }
+    .handoff-submit:disabled { opacity: 0.5; cursor: default; }
+    .handoff-submit:focus-visible { outline: 2px solid var(--sl-brand); outline-offset: 2px; }
+    .handoff.done { background: #f4f4f5; border-color: transparent; color: #3f3f46; font-size: 13px; line-height: 1.45; }
     @media (max-width: 480px) {
       .panel { right: 12px !important; left: 12px !important; width: auto; height: calc(100vh - 110px); }
       .bubble { bottom: 16px; }
@@ -196,6 +235,7 @@ class SiteLiftWidget {
   private open = false
   private busy = false
   private bubbleEl: HTMLButtonElement | null = null
+  private activeAbort: AbortController | null = null
 
   constructor(config: WidgetConfig) {
     this.config = config
@@ -295,6 +335,7 @@ class SiteLiftWidget {
     const panel = this.panel
     if (!panel) return
     this.open = false
+    this.activeAbort?.abort()
     panel.classList.add('closing')
     setTimeout(() => {
       panel.remove()
@@ -342,6 +383,123 @@ class SiteLiftWidget {
     this.scrollDown()
   }
 
+  private renderHandoff(payload: HandoffPayload): void {
+    this.messagesEl?.querySelectorAll('.handoff:not(.done)').forEach((el) => el.remove())
+    const card = document.createElement('div')
+    card.className = 'handoff'
+    card.dataset.handoffId = payload.handoffId
+
+    if (payload.intro) {
+      const intro = document.createElement('div')
+      intro.className = 'handoff-intro'
+      intro.textContent = payload.intro
+      card.appendChild(intro)
+    }
+
+    const inputs = new Map<string, HTMLInputElement | HTMLTextAreaElement>()
+    for (const field of payload.fields) {
+      const wrap = document.createElement('div')
+      wrap.className = 'handoff-field'
+      const label = document.createElement('label')
+      label.htmlFor = `sl-ho-${payload.handoffId}-${field.id}`
+      label.textContent = field.required || field.type === 'email' ? `${field.label} *` : field.label
+      wrap.appendChild(label)
+
+      const input =
+        field.type === 'textarea' ? document.createElement('textarea') : document.createElement('input')
+      input.id = label.htmlFor
+      if (input instanceof HTMLInputElement) {
+        input.type = field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'
+        input.autocomplete =
+          field.type === 'email' ? 'email' : field.type === 'name' ? 'name' : field.type === 'phone' ? 'tel' : 'on'
+      }
+      input.required = Boolean(field.required || field.type === 'email')
+      inputs.set(field.id, input)
+      wrap.appendChild(input)
+      card.appendChild(wrap)
+    }
+
+    const errEl = document.createElement('div')
+    errEl.className = 'handoff-error'
+    errEl.hidden = true
+    card.appendChild(errEl)
+
+    const submit = document.createElement('button')
+    submit.type = 'button'
+    submit.className = 'handoff-submit'
+    submit.textContent = 'Send to the team'
+    submit.addEventListener('click', () => {
+      void this.submitHandoff(payload, inputs, card, errEl, submit)
+    })
+    card.appendChild(submit)
+
+    this.messagesEl?.appendChild(card)
+    this.scrollDown()
+  }
+
+  private async submitHandoff(
+    payload: HandoffPayload,
+    inputs: Map<string, HTMLInputElement | HTMLTextAreaElement>,
+    card: HTMLDivElement,
+    errEl: HTMLDivElement,
+    submit: HTMLButtonElement,
+  ): Promise<void> {
+    errEl.hidden = true
+    const answers: Record<string, string> = {}
+    for (const field of payload.fields) {
+      const el = inputs.get(field.id)
+      const value = el?.value.trim() ?? ''
+      if ((field.required || field.type === 'email') && !value) {
+        errEl.textContent = `${field.label} is required`
+        errEl.hidden = false
+        el?.focus()
+        return
+      }
+      if (field.type === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        errEl.textContent = 'Enter a valid email address'
+        errEl.hidden = false
+        el?.focus()
+        return
+      }
+      if (value) answers[field.id] = value
+    }
+
+    const ids = loadIds(this.config.chatbotId)
+    if (!ids.conversationId) {
+      errEl.textContent = 'Conversation missing — send a message first.'
+      errEl.hidden = false
+      return
+    }
+
+    submit.disabled = true
+    try {
+      const res = await fetch(`${this.config.endpoint}/api/chat/${this.config.chatbotId}/handoff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: ids.conversationId,
+          visitorId: ids.visitorId,
+          handoffId: payload.handoffId,
+          answers,
+        }),
+      })
+      if (!res.ok) {
+        let message = 'Could not send your details. Please try again.'
+        try {
+          message =
+            ((await res.json()) as { error?: { message?: string } }).error?.message ?? message
+        } catch {}
+        throw new Error(message)
+      }
+      card.className = 'handoff done'
+      card.textContent = 'Thanks — someone from the team will follow up shortly.'
+    } catch (err) {
+      errEl.textContent = err instanceof Error ? err.message : 'Could not send your details.'
+      errEl.hidden = false
+      submit.disabled = false
+    }
+  }
+
   private scrollDown(): void {
     requestAnimationFrame(() => {
       if (this.messagesEl) this.messagesEl.scrollTop = this.messagesEl.scrollHeight
@@ -367,8 +525,38 @@ class SiteLiftWidget {
     botBubble.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>'
 
     let reply = ''
+    let pendingDelta = ''
+    let paintTimer: number | null = null
     let textNode: Text | null = null
-    let caret: HTMLSpanElement | null = null
+    let lastScrollAt = 0
+    const abort = new AbortController()
+    this.activeAbort = abort
+
+    const flushPending = (): void => {
+      const delta = pendingDelta
+      if (!delta) return
+      pendingDelta = ''
+      reply += delta
+      if (!textNode) {
+        textNode = document.createTextNode('')
+        const caret = document.createElement('span')
+        caret.className = 'caret'
+        botBubble.replaceChildren(textNode, caret)
+      }
+      textNode.appendData(delta)
+      const now = Date.now()
+      if (now - lastScrollAt >= 120) {
+        lastScrollAt = now
+        this.scrollDown()
+      }
+    }
+    const stopPainting = (): void => {
+      if (paintTimer !== null) {
+        clearInterval(paintTimer)
+        paintTimer = null
+      }
+      flushPending()
+    }
 
     try {
       const res = await fetch(
@@ -381,6 +569,7 @@ class SiteLiftWidget {
             visitorId: ids.visitorId,
             content,
           }),
+          signal: abort.signal,
         },
       )
 
@@ -408,34 +597,56 @@ class SiteLiftWidget {
           const eventName = frame.match(/^event: (.+)$/m)?.[1]
           const dataRaw = frame.match(/^data: (.+)$/m)?.[1]
           if (!eventName || !dataRaw) continue
-          const data = JSON.parse(dataRaw) as Record<string, string>
+          const data = JSON.parse(dataRaw) as Record<string, unknown>
 
-          if (eventName === 'meta' && data.conversationId) {
+          if (eventName === 'meta' && typeof data.conversationId === 'string') {
             saveConversationId(this.config.chatbotId, data.conversationId)
-          } else if (eventName === 'token') {
-            if (!textNode) {
-              textNode = document.createTextNode('')
-              caret = document.createElement('span')
-              caret.className = 'caret'
-              botBubble.replaceChildren(textNode, caret)
+          } else if (eventName === 'token' && typeof data.text === 'string') {
+            pendingDelta += data.text
+            if (paintTimer === null) {
+              flushPending()
+              paintTimer = setInterval(flushPending, 50)
             }
-            reply += data.text ?? ''
-            textNode.data = reply
-            this.scrollDown()
+          } else if (eventName === 'handoff') {
+            stopPainting()
+            const handoff = data as unknown as HandoffPayload
+            if (handoff.handoffId && Array.isArray(handoff.fields)) {
+              this.renderHandoff(handoff)
+            }
           } else if (eventName === 'error') {
-            throw new Error(data.code ?? 'AI_PROVIDER_ERROR')
+            throw new Error(typeof data.code === 'string' ? data.code : 'AI_PROVIDER_ERROR')
           }
         }
       }
 
+      stopPainting()
       const clean = unwrapReply(reply) ?? reply
-      botBubble.innerHTML = clean ? renderMarkdown(clean) : 'Sorry, I could not answer that.'
+      if (clean) botBubble.innerHTML = renderMarkdown(clean)
+      else if (!this.messagesEl?.querySelector('.handoff')) {
+        botBubble.textContent = 'Sorry, I could not answer that.'
+      } else {
+        botBubble.remove()
+      }
     } catch (err) {
-      botBubble.textContent = friendlyError(err)
-      botBubble.classList.add('error')
+      stopPainting()
+      if (!botBubble.isConnected || abort.signal.aborted) return
+      const message = friendlyError(err)
+      if (reply.trim()) {
+        botBubble.innerHTML = renderMarkdown(reply)
+        const note = document.createElement('div')
+        note.className = 'msg error'
+        note.style.marginTop = '6px'
+        note.textContent = message
+        botBubble.appendChild(note)
+      } else {
+        botBubble.textContent = message
+        botBubble.classList.add('error')
+      }
     } finally {
+      stopPainting()
+      this.activeAbort = null
       this.setBusy(false)
-      this.inputEl?.focus()
+      if (this.open) this.inputEl?.focus()
     }
   }
 }
@@ -459,7 +670,8 @@ function unwrapReply(text: string): string | null {
     }
     const keys = Object.keys(parsed)
     if (keys.length === 1) {
-      const value = parsed[keys[0]!]
+      const key = keys[0]
+      const value = key === undefined ? undefined : parsed[key]
       if (typeof value === 'string') return value
     }
   } catch {}
@@ -506,9 +718,11 @@ function renderMarkdown(text: string): string {
     const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed)
     if (heading) {
       flushList()
-      const level = heading[1]!.length
+      const level = heading[1]?.length
       const tag = level === 1 ? 'h3' : level === 2 ? 'h4' : 'h5'
-      blocks.push(`<${tag}>${renderInline(heading[2]!)}</${tag}>`)
+      const headingText = heading[2]
+      if (!headingText) continue
+      blocks.push(`<${tag}>${renderInline(headingText)}</${tag}>`)
       continue
     }
     if (/^(?:---+|\*\*\*+)$/.test(trimmed)) {
@@ -524,7 +738,9 @@ function renderMarkdown(text: string): string {
         flushList()
         list = { tag, items: [] }
       }
-      list.items.push((bullet?.[1] ?? numbered![1]!).trim())
+      const item = bullet?.[1] ?? numbered?.[1]
+      if (!item) continue
+      list.items.push(item.trim())
       continue
     }
     flushList()

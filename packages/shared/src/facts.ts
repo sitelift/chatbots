@@ -28,6 +28,8 @@ export const GUARDRAILS = [
   '- Be brief: reply in 1-2 short sentences, under ~30 words. Only write more when the visitor asks for detail.',
   '- Reply in plain text only. Never use JSON, code blocks, or markup the visitor would have to decode.',
   '- For anything urgent or sensitive, point the visitor to the listed phone or contact details.',
+  '- Do NOT offer a contact form on greeting, pricing questions, hours, or general curiosity.',
+  '- Only call offer_handoff when the visitor clearly asks to be contacted, leave their details, book, get a callback, or talk to a human — or after you have answered their questions and they explicitly want next steps with a person. Prefer answering first. At most once unless they ask again.',
 ].join('\n')
 
 const SECTION_LABELS: Record<string, string> = {

@@ -149,3 +149,28 @@ export const messages = sqliteTable(
   },
   (t) => [index('idx_messages_conversation_created').on(t.conversationId, t.createdAt)],
 )
+
+export const handoffs = sqliteTable(
+  'handoffs',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    chatbotId: text('chatbot_id')
+      .notNull()
+      .references(() => chatbots.id, { onDelete: 'cascade' }),
+    reason: text('reason').notNull(),
+    intro: text('intro'),
+    fieldsJson: text('fields_json').notNull(),
+    answersJson: text('answers_json'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    submittedAt: integer('submitted_at', { mode: 'timestamp_ms' }),
+  },
+  (t) => [
+    index('idx_handoffs_conversation').on(t.conversationId),
+    index('idx_handoffs_chatbot').on(t.chatbotId),
+  ],
+)

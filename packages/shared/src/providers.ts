@@ -6,6 +6,14 @@ export interface ProviderPreset {
   hint?: string
 }
 
+export const ROUTING_MODES = ['auto', 'latency', 'throughput', 'pin'] as const
+
+export type RoutingMode = (typeof ROUTING_MODES)[number]
+
+export function isRoutingMode(value: unknown): value is RoutingMode {
+  return typeof value === 'string' && (ROUTING_MODES as readonly string[]).includes(value)
+}
+
 export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     id: 'openai',

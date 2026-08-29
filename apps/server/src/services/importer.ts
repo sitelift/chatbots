@@ -296,7 +296,7 @@ async function extractFactsWithRetry(text: string, model: string): Promise<Busin
     },
     { role: 'user' as const, content: EXTRACT_PROMPT.replace('TEXT', text) },
   ]
-  const options = { model, baseUrl: null, temperature: 0, noReasoning: true }
+  const options = { model, baseUrl: null, temperature: 0 }
 
   let raw = await completeJson(messages, options, credentials)
   for (let attempt = 0; attempt < 1; attempt++) {

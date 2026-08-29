@@ -3,14 +3,19 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config as loadEnv } from 'dotenv'
 
-for (let dir = process.cwd(); ; dir = path.dirname(dir)) {
-  const candidate = path.join(dir, '.env')
-  if (existsSync(candidate)) {
-    loadEnv({ path: candidate })
-    break
+const g = globalThis as typeof globalThis & { __siteliftEnvLoaded?: boolean }
+
+if (!g.__siteliftEnvLoaded) {
+  g.__siteliftEnvLoaded = true
+  for (let dir = process.cwd(); ; dir = path.dirname(dir)) {
+    const candidate = path.join(dir, '.env')
+    if (existsSync(candidate)) {
+      loadEnv({ path: candidate })
+      break
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir) break
   }
-  const parent = path.dirname(dir)
-  if (parent === dir) break
 }
 
 export const env = {

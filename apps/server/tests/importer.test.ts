@@ -190,11 +190,61 @@ describe('POST /api/admin/chatbots/:id/test', () => {
       headers: headers(),
       body: JSON.stringify({
         content: 'What are your hours?',
+        dryRun: true,
         facts: { hours: 'Mon-Fri 8am-6pm' },
       }),
     })
     expect(res.status).toBe(200)
     expect((await res.json()).reply).toBe('We are open Mon-Fri 8am-6pm.')
+  })
+
+  it('forwards prior history to the provider', async () => {
+    setJsonCompletionContent('Great — I will take your details.')
+    const { clearCompletionBodies, getLastCompletionMessages } = await import('./helpers')
+    clearCompletionBodies()
+    const res = await createApp().request(`/api/admin/chatbots/${DEMO_CHATBOT_ID}/test`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        content: 'yes',
+        dryRun: true,
+        history: [
+          { role: 'user', content: 'Tell me about pricing' },
+          { role: 'assistant', content: 'Want to set up a discovery call?' },
+        ],
+        facts: { overview: 'SiteLift builds websites' },
+      }),
+    })
+    expect(res.status).toBe(200)
+    const msgs = getLastCompletionMessages()
+    expect(msgs.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user'])
+    expect(msgs.at(-1)?.content).toBe('yes')
+    expect(msgs.at(-2)?.content).toBe('Want to set up a discovery call?')
+  })
+
+  it('persists turns in live test mode', async () => {
+    setJsonCompletionContent('Hello from live test.')
+    const res = await createApp().request(`/api/admin/chatbots/${DEMO_CHATBOT_ID}/test`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        content: 'Hi there',
+        dryRun: false,
+        facts: { overview: 'SiteLift builds websites' },
+      }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { conversationId: string; visitorId: string; reply: string }
+    expect(body.conversationId).toMatch(/^cv_/)
+    expect(body.visitorId).toMatch(/^test_/)
+    expect(body.reply).toBe('Hello from live test.')
+
+    const stored = db
+      .select()
+      .from(messages)
+      .where(eq(messages.conversationId, body.conversationId))
+      .all()
+    expect(stored.map((m) => m.role)).toEqual(['user', 'assistant'])
   })
 
   it('rejects empty facts', async () => {
