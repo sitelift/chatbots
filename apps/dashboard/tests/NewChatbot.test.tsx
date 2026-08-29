@@ -92,12 +92,17 @@ describe('NewChatbot wizard', () => {
     expect((screen.getByLabelText('About us') as HTMLTextAreaElement).value).toBe('')
   })
 
-  it('creates the chatbot and lands on the editor leads tab', async () => {
+  it('creates the chatbot and lands on the editor inbox tab', async () => {
     const created = createdBot({ facts: { overview: 'Plumbing in Austin.' } })
     const fetchMock = stubApi([
       { path: '/api/admin/chatbots', method: 'POST', status: 201, body: created },
       { path: '/api/admin/chatbots/ch_new', method: 'GET', status: 200, body: created },
-      { path: '/api/admin/chatbots/ch_new/leads', method: 'GET', status: 200, body: { leads: [] } },
+      {
+        path: /^\/api\/admin\/chatbots\/ch_new\/conversations/,
+        method: 'GET',
+        status: 200,
+        body: { conversations: [] },
+      },
       {
         path: '/api/admin/chatbots/ch_new/stats',
         method: 'GET',
@@ -123,7 +128,9 @@ describe('NewChatbot wizard', () => {
     await waitFor(() => {
       expect(rr.currentPath()).toBe('/chatbots/ch_new')
     })
-    expect(await screen.findByText('Captured leads')).toBeDefined()
+    expect(await screen.findByRole('tab', { name: 'Inbox' })).toBeDefined()
+    expect(screen.getByRole('tab', { name: 'Inbox' }).getAttribute('aria-selected')).toBe('true')
+    expect(await screen.findByText('0 threads')).toBeDefined()
 
     const postCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(postCall?.[0]).toBe('/api/admin/chatbots')

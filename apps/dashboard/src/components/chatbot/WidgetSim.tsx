@@ -29,25 +29,41 @@ export interface WidgetMessage {
   text: string
 }
 
+export interface WidgetHandoff {
+  id: string
+  intro?: string
+  fields: Array<{
+    id: string
+    type: 'name' | 'email' | 'phone' | 'text' | 'textarea'
+    label: string
+    required?: boolean
+  }>
+  submitted?: boolean
+}
+
 export function WidgetSim({
   form,
   messages,
+  handoffs = [],
   busy,
   open,
   onToggleOpen,
   input,
   onInput,
   onSend,
+  onHandoffSubmit,
   interactive = true,
 }: {
   form: FormState
   messages: WidgetMessage[]
+  handoffs?: WidgetHandoff[]
   busy: boolean
   open: boolean
   onToggleOpen: () => void
   input: string
   onInput: (value: string) => void
   onSend: (text?: string) => void
+  onHandoffSubmit?: (handoffId: string, answers: Record<string, string>) => void
   interactive?: boolean
 }) {
   const brand = form.brandColor || WIDGET.ink
@@ -59,10 +75,10 @@ export function WidgetSim({
 
   useEffect(() => {
     const el = scrollRef.current
-    if (el && (messages.length > 0 || busy)) {
+    if (el && (messages.length > 0 || busy || handoffs.length > 0)) {
       el.scrollTop = el.scrollHeight
     }
-  }, [messages, busy])
+  }, [messages, busy, handoffs])
 
   return (
     <div className="relative h-[560px] overflow-hidden rounded-xl border bg-white shadow-sm">
@@ -167,6 +183,70 @@ export function WidgetSim({
                 {m.text}
               </div>
             ))}
+            {handoffs.map((handoff) =>
+              handoff.submitted ? (
+                <div
+                  key={handoff.id}
+                  className="rounded-[14px] bg-[#f4f4f5] px-3.5 py-3 text-[13px] leading-relaxed text-[#3f3f46]"
+                >
+                  Thanks — someone from the team will follow up shortly.
+                </div>
+              ) : (
+                <form
+                  key={handoff.id}
+                  className="space-y-2.5 rounded-[14px] border border-[#e4e4e7] bg-[#fafafa] p-3.5"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    if (!onHandoffSubmit) return
+                    const data = new FormData(e.currentTarget)
+                    const answers: Record<string, string> = {}
+                    for (const field of handoff.fields) {
+                      const value = String(data.get(field.id) ?? '').trim()
+                      if (value) answers[field.id] = value
+                    }
+                    onHandoffSubmit(handoff.id, answers)
+                  }}
+                >
+                  {handoff.intro && (
+                    <p className="text-[13px] leading-relaxed text-[#3f3f46]">{handoff.intro}</p>
+                  )}
+                  {handoff.fields.map((field) => (
+                    <label key={field.id} className="block space-y-1">
+                      <span className="text-xs font-medium text-[#52525b]">
+                        {field.required || field.type === 'email' ? `${field.label} *` : field.label}
+                      </span>
+                      {field.type === 'textarea' ? (
+                        <textarea
+                          name={field.id}
+                          required={Boolean(field.required)}
+                          rows={3}
+                          className="w-full rounded-[10px] border border-[#e4e4e7] bg-white px-3 py-2 text-sm text-[#18181b] outline-none focus-visible:ring-2"
+                          style={{ '--tw-ring-color': brand } as React.CSSProperties}
+                        />
+                      ) : (
+                        <input
+                          name={field.id}
+                          type={
+                            field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'
+                          }
+                          required={Boolean(field.required || field.type === 'email')}
+                          className="w-full rounded-[10px] border border-[#e4e4e7] bg-white px-3 py-2 text-sm text-[#18181b] outline-none focus-visible:ring-2"
+                          style={{ '--tw-ring-color': brand } as React.CSSProperties}
+                        />
+                      )}
+                    </label>
+                  ))}
+                  <button
+                    type="submit"
+                    disabled={!interactive}
+                    style={{ background: brand, color: onBrand }}
+                    className="w-full rounded-[10px] px-3 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-40"
+                  >
+                    Send to the team
+                  </button>
+                </form>
+              ),
+            )}
             {busy && (
               <div className="inline-flex gap-1 p-1.5">
                 {[0, 1, 2].map((i) => (

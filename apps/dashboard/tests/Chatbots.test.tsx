@@ -79,16 +79,27 @@ describe('ChatbotsPage', () => {
         body: { ...bot('ch_1', 'Acme HVAC'), facts: { overview: 'Family HVAC in Austin.' } },
       },
       {
-        path: '/api/admin/chatbots/ch_1/leads',
+        path: /^\/api\/admin\/chatbots\/ch_1\/conversations/,
         method: 'GET',
         status: 200,
-        body: { leads: [] },
+        body: { conversations: [] },
+      },
+      {
+        path: '/api/admin/chatbots/ch_1/stats',
+        method: 'GET',
+        status: 200,
+        body: {
+          windowDays: 30,
+          days: [],
+          totals: { conversations: 0, leads: 0, conversionRate: 0, avgMessagesPerConversation: 0 },
+        },
       },
     ])
     renderAtLocation('/chatbots')
 
     fireEvent.click(await screen.findByText('Acme HVAC'))
-    expect(await screen.findByText('Captured leads')).toBeDefined()
+    expect(await screen.findByRole('tab', { name: 'Inbox' })).toBeDefined()
+    expect(await screen.findByText('0 threads')).toBeDefined()
   })
 
   it('arms delete before sending the DELETE request', async () => {

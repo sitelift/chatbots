@@ -45,7 +45,12 @@ function view(overrides: Record<string, unknown> = {}) {
 function editorStub(overrides: Record<string, unknown> = {}) {
   return stubApi([
     { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view(overrides) },
-    { path: '/api/admin/chatbots/ch_edit1/leads', method: 'GET', status: 200, body: { leads: [] } },
+    {
+      path: /^\/api\/admin\/chatbots\/ch_edit1\/conversations/,
+      method: 'GET',
+      status: 200,
+      body: { conversations: [] },
+    },
     {
       path: '/api/admin/chatbots/ch_edit1/stats',
       method: 'GET',
@@ -60,21 +65,23 @@ async function openTab(label: string) {
 }
 
 describe('ChatbotEditor', () => {
-  it('defaults to the leads tab and shows captured leads', async () => {
+  it('defaults to the inbox tab and lists conversations', async () => {
     stubApi([
       { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
       {
-        path: '/api/admin/chatbots/ch_edit1/leads',
+        path: /^\/api\/admin\/chatbots\/ch_edit1\/conversations/,
         method: 'GET',
         status: 200,
         body: {
-          leads: [
+          conversations: [
             {
               id: 'cv_1',
               visitorName: 'Maria',
               visitorEmail: 'maria@test.dev',
+              reason: null,
               lastMessage: 'My AC is blowing warm air',
               messageCount: 4,
+              isLead: true,
               createdAt: now,
             },
           ],
@@ -90,18 +97,82 @@ describe('ChatbotEditor', () => {
     renderAtLocation('/chatbots/ch_edit1')
 
     expect(await screen.findByText('Maria')).toBeDefined()
-    expect(screen.getByText('maria@test.dev')).toBeDefined()
     expect(screen.getByText(/My AC is blowing warm air/)).toBeDefined()
+    expect(screen.getByText('Lead')).toBeDefined()
   })
 
-  it('renders 30-day activity stats above the leads inbox', async () => {
+  it('opens a full thread when a conversation is selected', async () => {
     stubApi([
       { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
       {
-        path: '/api/admin/chatbots/ch_edit1/leads',
+        path: /^\/api\/admin\/chatbots\/ch_edit1\/conversations\?/,
         method: 'GET',
         status: 200,
-        body: { leads: [] },
+        body: {
+          conversations: [
+            {
+              id: 'cv_1',
+              visitorName: 'Maria',
+              visitorEmail: 'maria@test.dev',
+              reason: null,
+              lastMessage: 'My AC is blowing warm air',
+              messageCount: 2,
+              isLead: true,
+              createdAt: now,
+            },
+          ],
+        },
+      },
+      {
+        path: '/api/admin/chatbots/ch_edit1/conversations/cv_1',
+        method: 'GET',
+        status: 200,
+        body: {
+          id: 'cv_1',
+          visitorName: 'Maria',
+          visitorEmail: 'maria@test.dev',
+          reason: 'Wants a repair quote',
+          isLead: true,
+          createdAt: now,
+          messages: [
+            {
+              id: 'm1',
+              role: 'user',
+              content: 'My AC is blowing warm air',
+              createdAt: now,
+            },
+            {
+              id: 'm2',
+              role: 'assistant',
+              content: 'I can help with that.',
+              createdAt: now,
+            },
+          ],
+        },
+      },
+      {
+        path: '/api/admin/chatbots/ch_edit1/stats',
+        method: 'GET',
+        status: 200,
+        body: EMPTY_STATS,
+      },
+    ])
+    renderAtLocation('/chatbots/ch_edit1')
+
+    fireEvent.click(await screen.findByText('Maria'))
+    expect(await screen.findByText('I can help with that.')).toBeDefined()
+    expect(screen.getByText('Wants a repair quote')).toBeDefined()
+    expect(screen.getByRole('link', { name: 'maria@test.dev' })).toBeDefined()
+  })
+
+  it('renders 30-day activity stats above the inbox', async () => {
+    stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
+      {
+        path: /^\/api\/admin\/chatbots\/ch_edit1\/conversations/,
+        method: 'GET',
+        status: 200,
+        body: { conversations: [] },
       },
       {
         path: '/api/admin/chatbots/ch_edit1/stats',
@@ -132,7 +203,7 @@ describe('ChatbotEditor', () => {
     renderAtLocation('/chatbots/ch_edit1')
 
     expect(await screen.findByText('Import a website')).toBeDefined()
-    expect(screen.queryByText('Captured leads')).toBeNull()
+    expect(screen.queryByText('Select a conversation')).toBeNull()
   })
 
   it('prefills structured facts on the Knowledge tab', async () => {
@@ -333,6 +404,66 @@ describe('ChatbotEditor', () => {
 
     await waitFor(() => {
       expect(screen.getByText('We are open Mon–Fri 8–6.')).toBeDefined()
+    })
+  })
+
+  it('sends prior turns as history on the next test message', async () => {
+    stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
+      {
+        path: '/api/admin/chatbots/ch_edit1/test',
+        method: 'POST',
+        status: 200,
+        body: { reply: 'Want to set up a discovery call?' },
+      },
+    ])
+    renderAtLocation('/chatbots/ch_edit1')
+    await openTab('Test')
+
+    fireEvent.click(await screen.findByLabelText(/Dry run/i))
+
+    fireEvent.change(await screen.findByLabelText('Test message'), {
+      target: { value: 'Tell me about pricing' },
+    })
+    fireEvent.click(screen.getByLabelText('Send message'))
+    await waitFor(() => {
+      expect(screen.getByText('Want to set up a discovery call?')).toBeDefined()
+    })
+
+    const fetchMock = stubApi([
+      { path: '/api/admin/chatbots/ch_edit1', method: 'GET', status: 200, body: view() },
+      {
+        path: '/api/admin/chatbots/ch_edit1/test',
+        method: 'POST',
+        status: 200,
+        body: { reply: 'Great — I will take your details.' },
+      },
+    ])
+
+    fireEvent.change(screen.getByLabelText('Test message'), {
+      target: { value: 'yes' },
+    })
+    fireEvent.click(screen.getByLabelText('Send message'))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([path, init]) =>
+          String(path) === '/api/admin/chatbots/ch_edit1/test' &&
+          (init as RequestInit | undefined)?.method === 'POST' &&
+          String((init as RequestInit).body ?? '').includes('"yes"'),
+      )
+      expect(call).toBeDefined()
+      const body = JSON.parse(String((call?.[1] as RequestInit).body)) as {
+        content: string
+        history: Array<{ role: string; content: string }>
+        dryRun?: boolean
+      }
+      expect(body.content).toBe('yes')
+      expect(body.dryRun).toBe(true)
+      expect(body.history).toEqual([
+        { role: 'user', content: 'Tell me about pricing' },
+        { role: 'assistant', content: 'Want to set up a discovery call?' },
+      ])
     })
   })
 

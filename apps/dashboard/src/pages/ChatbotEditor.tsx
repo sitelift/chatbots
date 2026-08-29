@@ -5,7 +5,6 @@ import {
   chatbotInputSchema,
   chatbotStatusLabels,
   composeSystemPrompt,
-  type LeadView,
 } from '@sitelift/shared'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -17,7 +16,6 @@ import {
   Eye,
   Inbox,
   LoaderCircle,
-  Mail,
   Send,
   Settings as SettingsIcon,
   Trash2,
@@ -25,6 +23,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ColorField } from '../components/ColorField'
+import { ConversationInbox } from '../components/ConversationInbox'
 import { ActivityCard, ActivityCardSkeleton } from '../components/charts'
 import { DomainsList } from '../components/chatbot/DomainsList'
 import { KnowledgeEditor } from '../components/chatbot/KnowledgeEditor'
@@ -35,7 +34,6 @@ import { WidgetSim } from '../components/chatbot/WidgetSim'
 import { Dialog } from '../components/Dialog'
 import { StatusBadge } from '../components/StatusBadge'
 import { type AdminApiError, apiFetch } from '../lib/api'
-import { relativeTime } from '../lib/reltime'
 import { useSession } from '../lib/session'
 import { inputClass, labelClass } from '../lib/ui'
 import { uid } from '../lib/uid'
@@ -45,16 +43,7 @@ interface EditorProps {
   previewOwner?: boolean
 }
 
-function initials(name: string | null, email: string | null): string {
-  const source = name?.trim() || email?.split('@')[0] || '?'
-  const parts = source.split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) {
-    return `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`.toUpperCase()
-  }
-  return source.slice(0, 2).toUpperCase()
-}
-
-type Tab = 'leads' | 'knowledge' | 'test' | 'settings'
+type Tab = 'inbox' | 'knowledge' | 'test' | 'settings'
 
 export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
   const navigate = useNavigate()
@@ -70,7 +59,7 @@ export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
   const [savedFlash, setSavedFlash] = useState(false)
   const [armedDelete, setArmedDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [tab, setTabState] = useState<Tab>('leads')
+  const [tab, setTabState] = useState<Tab>('inbox')
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const tabChosenRef = useRef(false)
 
@@ -103,7 +92,7 @@ export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
       setForm(nextForm)
       setBaseline(JSON.stringify(nextForm))
       if (!tabChosenRef.current) {
-        setTabState(data.facts ? 'leads' : 'knowledge')
+        setTabState(data.facts ? 'inbox' : 'knowledge')
       }
     } catch (err) {
       const api = (err as Error & { api?: AdminApiError }).api
@@ -230,7 +219,7 @@ export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
         <div className="skeleton h-4 w-24 rounded" />
         <div className="skeleton mt-6 h-8 w-64 rounded" />
         <div className="mt-8 flex gap-3 border-b pb-3">
-          {['leads', 'knowledge', 'test', 'settings'].map((id) => (
+          {['inbox', 'knowledge', 'test', 'settings'].map((id) => (
             <div key={id} className="skeleton h-5 w-20 rounded" />
           ))}
         </div>
@@ -240,7 +229,7 @@ export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
   }
 
   const allTabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'leads', label: 'Leads', icon: <Inbox className="size-3.5" /> },
+    { id: 'inbox', label: 'Inbox', icon: <Inbox className="size-3.5" /> },
     { id: 'knowledge', label: 'Knowledge', icon: <BookOpen className="size-3.5" /> },
     { id: 'test', label: 'Test', icon: <Send className="size-3.5" /> },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon className="size-3.5" /> },
@@ -315,7 +304,7 @@ export function ChatbotEditor({ botId, previewOwner = false }: EditorProps) {
       </div>
 
       <div className="mt-6">
-        {tab === 'leads' && <LeadsTab botId={botId} />}
+        {tab === 'inbox' && <InboxTab botId={botId} />}
         {tab === 'knowledge' && (
           <div className="space-y-5">
             <KnowledgeEditor form={form} set={set} preview={preview} canImport={!ownerView} />
@@ -402,129 +391,35 @@ function BackLink({ onClick }: { onClick: () => void }) {
   )
 }
 
-function LeadsTab({ botId }: { botId: string }) {
-  const [leads, setLeads] = useState<LeadView[] | null>(null)
+function InboxTab({ botId }: { botId: string }) {
   const [stats, setStats] = useState<ChatbotStats | null>(null)
-  const [error, setError] = useState('')
+  const [statsReady, setStatsReady] = useState(false)
 
-  const load = useCallback(async () => {
-    const [leadsResult, statsResult] = await Promise.allSettled([
-      apiFetch<{ leads: LeadView[] }>(`/api/admin/chatbots/${botId}/leads`),
-      apiFetch<ChatbotStats>(`/api/admin/chatbots/${botId}/stats`),
-    ])
-    if (leadsResult.status === 'fulfilled') {
-      setLeads(leadsResult.value.leads)
-    } else {
-      const api = (leadsResult.reason as Error & { api?: AdminApiError }).api
-      setError(api?.message ?? 'Failed to load leads')
-      setLeads([])
-    }
-    if (statsResult.status === 'fulfilled') {
-      setStats(statsResult.value)
+  useEffect(() => {
+    let cancelled = false
+    apiFetch<ChatbotStats>(`/api/admin/chatbots/${botId}/stats`)
+      .then((data) => {
+        if (!cancelled) setStats(data)
+      })
+      .catch(() => {
+        /* stats are optional — inbox still works without them */
+      })
+      .finally(() => {
+        if (!cancelled) setStatsReady(true)
+      })
+    return () => {
+      cancelled = true
     }
   }, [botId])
 
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  if (leads === null) {
-    return (
-      <div className="space-y-5">
-        <ActivityCardSkeleton />
-        <section className="rounded-xl border bg-card p-5 shadow-sm">
-          <div className="skeleton h-5 w-36 rounded" />
-          <div className="mt-1.5 skeleton h-4 w-80 max-w-full rounded" />
-          <div className="mt-5 space-y-4">
-            {['first', 'second', 'third'].map((id) => (
-              <div key={id} className="flex items-center gap-3">
-                <div className="skeleton size-9 rounded-full" />
-                <div className="flex-1 space-y-1.5">
-                  <div className="skeleton h-4 w-40 rounded" />
-                  <div className="skeleton h-3 w-64 max-w-full rounded" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-5">
-      {stats !== null && <ActivityCard stats={stats} />}
-
-      <section className="rounded-xl border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-medium">Captured leads</h2>
-        <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-          When a visitor shares their name or email, it lands here with the last thing they said.
-          These are your calls to make.
-        </p>
-
-        {error && (
-          <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        {leads.length === 0 ? (
-          <div className="mt-6 flex flex-col items-center rounded-lg border border-dashed py-12 text-center">
-            <div className="grid size-11 place-items-center rounded-full bg-muted">
-              <Inbox className="size-5 text-muted-foreground" />
-            </div>
-            <p className="mt-4 text-sm font-medium">No leads captured yet</p>
-            <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
-              The bot naturally asks visitors for their name and email when they seem ready to buy.
-              Captured leads appear here and trigger an email notification.
-            </p>
-          </div>
-        ) : (
-          <>
-            <ul className="mt-4 divide-y">
-              {leads.map((lead) => (
-                <li key={lead.id} className="flex items-start gap-3 py-3">
-                  <div className="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium uppercase text-muted-foreground">
-                    {initials(lead.visitorName, lead.visitorEmail)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {lead.visitorName || lead.visitorEmail || 'Unknown visitor'}
-                    </p>
-                    {lead.visitorEmail && (
-                      <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                        <Mail className="size-3" />
-                        {lead.visitorEmail}
-                      </p>
-                    )}
-                    {lead.lastMessage && (
-                      <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground">
-                        “{lead.lastMessage}”
-                      </p>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p
-                      className="tnum text-xs text-muted-foreground"
-                      title={new Date(lead.createdAt).toLocaleString()}
-                    >
-                      {relativeTime(new Date(lead.createdAt))}
-                    </p>
-                    <p className="tnum mt-1 text-xs text-muted-foreground">
-                      {lead.messageCount} messages
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            {leads.length >= 25 && (
-              <p className="tnum mt-3 border-t pt-3 text-xs text-muted-foreground">
-                Showing the latest 25 leads.
-              </p>
-            )}
-          </>
-        )}
-      </section>
+      {!statsReady ? (
+        <ActivityCardSkeleton />
+      ) : stats !== null ? (
+        <ActivityCard stats={stats} />
+      ) : null}
+      <ConversationInbox botId={botId} />
     </div>
   )
 }
@@ -534,6 +429,22 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
   const [messages, setMessages] = useState<
     Array<{ id: string; role: 'user' | 'bot'; text: string }>
   >([])
+  const [handoffs, setHandoffs] = useState<
+    Array<{
+      id: string
+      intro?: string
+      fields: Array<{
+        id: string
+        type: 'name' | 'email' | 'phone' | 'text' | 'textarea'
+        label: string
+        required?: boolean
+      }>
+      submitted?: boolean
+    }>
+  >([])
+  const [conversationId, setConversationId] = useState<string | undefined>()
+  const [visitorId, setVisitorId] = useState<string | undefined>()
+  const [dryRun, setDryRun] = useState(false)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -541,6 +452,12 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
   async function send(preset?: string) {
     const content = (preset ?? input).trim()
     if (!content || busy) return
+    const history = dryRun
+      ? messages.map((m) => ({
+          role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+          content: m.text,
+        }))
+      : undefined
     setInput('')
     setMessages((m) => [...m, { id: uid(), role: 'user', text: content }])
     setBusy(true)
@@ -548,9 +465,29 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
     try {
       const res = await apiFetch<ChatbotTestReply>(`/api/admin/chatbots/${botId}/test`, {
         method: 'POST',
-        body: JSON.stringify({ content, facts: cleanFacts(form.facts) }),
+        body: JSON.stringify({
+          content,
+          facts: cleanFacts(form.facts),
+          dryRun,
+          ...(dryRun ? { history } : { conversationId, visitorId }),
+        }),
       })
-      setMessages((m) => [...m, { id: uid(), role: 'bot', text: res.reply }])
+      if (res.conversationId) setConversationId(res.conversationId)
+      if (res.visitorId) setVisitorId(res.visitorId)
+      if (res.reply.trim()) {
+        setMessages((m) => [...m, { id: uid(), role: 'bot', text: res.reply }])
+      }
+      if (res.handoff) {
+        const handoff = res.handoff
+        setHandoffs((h) => [
+          ...h.filter((x) => x.submitted),
+          {
+            id: handoff.handoffId,
+            intro: handoff.intro,
+            fields: handoff.fields,
+          },
+        ])
+      }
     } catch (err) {
       const api = (err as Error & { api?: AdminApiError }).api
       setError(api?.message ?? 'The bot could not answer')
@@ -559,18 +496,55 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
     }
   }
 
+  async function submitHandoff(handoffId: string, answers: Record<string, string>) {
+    if (!conversationId || !visitorId) {
+      setHandoffs((rows) =>
+        rows.map((row) => (row.id === handoffId ? { ...row, submitted: true } : row)),
+      )
+      return
+    }
+    try {
+      await apiFetch(`/api/admin/chatbots/${botId}/test/handoff`, {
+        method: 'POST',
+        body: JSON.stringify({
+          conversationId,
+          visitorId,
+          handoffId,
+          answers,
+          dryRun,
+        }),
+      })
+      setHandoffs((rows) =>
+        rows.map((row) => (row.id === handoffId ? { ...row, submitted: true } : row)),
+      )
+    } catch (err) {
+      const api = (err as Error & { api?: AdminApiError }).api
+      setError(api?.message ?? 'Could not send the contact form')
+    }
+  }
+
+  function resetConversation() {
+    setMessages([])
+    setHandoffs([])
+    setConversationId(undefined)
+    setVisitorId(undefined)
+    setError('')
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div>
         <WidgetSim
           form={form}
           messages={messages}
+          handoffs={handoffs}
           busy={busy}
           open={open}
           onToggleOpen={() => setOpen((o) => !o)}
           input={input}
           onInput={setInput}
           onSend={(preset) => void send(preset)}
+          onHandoffSubmit={(handoffId, answers) => void submitHandoff(handoffId, answers)}
         />
 
         {error && (
@@ -584,15 +558,36 @@ function TestTab({ botId, form }: { botId: string; form: FormState }) {
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           <h2 className="text-base font-medium">Live preview</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            This is exactly how a visitor sees the widget — your brand color, welcome message and
-            quick replies, answering from the knowledge above. Nothing here is saved.
+            Same chat loop as the embed: full conversation context, saved messages, and real lead
+            emails when a contact form is submitted. Answers from the draft knowledge above (even if
+            unsaved).
           </p>
+          <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[13px] leading-relaxed">
+            <input
+              type="checkbox"
+              checked={dryRun}
+              aria-label="Dry run"
+              onChange={(e) => {
+                setDryRun(e.target.checked)
+                resetConversation()
+              }}
+              className="mt-0.5 size-4 rounded border"
+            />
+            <span>
+              <span className="font-medium text-foreground">Dry run</span>
+              <span className="mt-0.5 block text-muted-foreground">
+                Don’t save messages or send email — useful for prompt tinkering only.
+              </span>
+            </span>
+          </label>
+          {!dryRun && (
+            <p className="mt-3 rounded-md bg-muted px-3 py-2 text-[13px] text-muted-foreground">
+              Live mode — turns land in Leads and fire SMTP when configured.
+            </p>
+          )}
           <button
             type="button"
-            onClick={() => {
-              setMessages([])
-              setError('')
-            }}
+            onClick={resetConversation}
             className="mt-3 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors duration-150 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             Reset conversation

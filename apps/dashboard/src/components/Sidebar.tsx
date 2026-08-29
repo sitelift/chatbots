@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Bot, MessageSquare, Settings, TrendingUp, Users, Zap } from 'lucide-react'
+import { Bot, Settings, TrendingUp, Users } from 'lucide-react'
 import { useSession } from '../lib/session'
 import { Logo } from './Logo'
 
@@ -19,20 +19,12 @@ const nav = [
     roles: ['agency', 'client'] as const,
   },
   {
-    path: '/conversations',
-    label: 'Conversations',
-    icon: MessageSquare,
-    enabled: false,
-    roles: ['agency', 'client'] as const,
+    path: '/clients',
+    label: 'Clients',
+    icon: Users,
+    enabled: true,
+    roles: ['agency'] as const,
   },
-  {
-    path: '/leads',
-    label: 'Leads',
-    icon: Zap,
-    enabled: false,
-    roles: ['agency', 'client'] as const,
-  },
-  { path: '/clients', label: 'Clients', icon: Users, enabled: true, roles: ['agency'] as const },
   {
     path: '/settings',
     label: 'Settings',

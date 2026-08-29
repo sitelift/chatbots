@@ -30,19 +30,13 @@ function editorRoutes(bot = OWNER_BOT) {
   return [
     { path: `/api/admin/chatbots/${bot.id}`, method: 'GET', status: 200, body: bot },
     {
-      path: `/api/admin/chatbots/${bot.id}/leads`,
+      path: new RegExp(`^/api/admin/chatbots/${bot.id}/conversations`),
       method: 'GET',
       status: 200,
-      body: { leads: [] },
+      body: { conversations: [] },
     },
-  ]
-}
-
-function ownerEditorStub() {
-  return stubApi([
-    ...editorRoutes(),
     {
-      path: '/api/admin/chatbots/ch_own1/stats',
+      path: `/api/admin/chatbots/${bot.id}/stats`,
       method: 'GET',
       status: 200,
       body: {
@@ -51,7 +45,11 @@ function ownerEditorStub() {
         totals: { conversations: 0, leads: 0, conversionRate: 0, avgMessagesPerConversation: 0 },
       },
     },
-  ])
+  ]
+}
+
+function ownerEditorStub() {
+  return stubApi([...editorRoutes()])
 }
 
 describe('owner portal preview', () => {
@@ -60,9 +58,9 @@ describe('owner portal preview', () => {
     renderAtLocation('/chatbots/ch_own1?as=owner')
 
     await screen.findByText('Bella Café')
-    const tabBar = await screen.findByRole('tablist')
+    const tabBar = await screen.findByRole('tablist', { name: 'Editor sections' })
     const tabNames = Array.from(tabBar.querySelectorAll('button')).map((b) => b.textContent?.trim())
-    expect(tabNames).toEqual(['Leads', 'Knowledge', 'Test'])
+    expect(tabNames).toEqual(['Inbox', 'Knowledge', 'Test'])
     expect(screen.getByText(/previewing the owner portal/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: /exit preview/i })).toBeTruthy()
   })
@@ -72,9 +70,9 @@ describe('owner portal preview', () => {
     renderAtLocation('/chatbots/ch_own1')
 
     await screen.findByText('Bella Café')
-    const tabBar = await screen.findByRole('tablist')
+    const tabBar = await screen.findByRole('tablist', { name: 'Editor sections' })
     const tabNames = Array.from(tabBar.querySelectorAll('button')).map((b) => b.textContent?.trim())
-    expect(tabNames).toEqual(['Leads', 'Knowledge', 'Test', 'Settings'])
+    expect(tabNames).toEqual(['Inbox', 'Knowledge', 'Test', 'Settings'])
     expect(screen.queryByText(/previewing the owner portal/i)).toBeNull()
   })
 })
@@ -124,9 +122,9 @@ describe('client role gating', () => {
     renderAtLocation('/chatbots/ch_cli1')
 
     await screen.findByText('Bella Café')
-    const tabBar = await screen.findByRole('tablist')
+    const tabBar = await screen.findByRole('tablist', { name: 'Editor sections' })
     const tabNames = Array.from(tabBar.querySelectorAll('button')).map((b) => b.textContent?.trim())
-    expect(tabNames).toEqual(['Leads', 'Knowledge', 'Test'])
+    expect(tabNames).toEqual(['Inbox', 'Knowledge', 'Test'])
     expect(screen.queryByText(/previewing the owner portal/i)).toBeNull()
     expect(screen.queryByRole('button', { name: /exit preview/i })).toBeNull()
     await screen.findByRole('tab', { name: /knowledge/i })
