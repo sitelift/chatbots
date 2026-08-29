@@ -489,6 +489,8 @@ seeded — fresh installs start with a blank chatbot list.
 ## Commit trail (this rebuild)
 
 ```
+1cb25b0 docs: rewrite README as an open-source landing page
+e4d205b docs: sync PROGRESS and architecture for handoff, Inbox, provider hardening
 0f1e500 feat: per-bot Inbox, activity chart, and Settings for routing/SMTP
 e0140e3 feat: provider hardening, in-chat handoff, and SMTP lead mail
 6cab31c docs: PROGRESS.md — round 4 snapshot (domain guardrails, relative lead timestamps), tests 134
