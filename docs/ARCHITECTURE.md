@@ -61,22 +61,28 @@ Hono application. Route groups:
 
 | Area | Routes | Auth |
 | --- | --- | --- |
-| Public chat | `GET /api/chatbots/:id` (public metadata) · `POST /api/chat/:chatbotId/messages` · `POST /api/chat/:chatbotId/messages/stream` (SSE) | none; origin checked against chatbot's domain allowlist |
+| Public chat | `GET /api/chatbots/:id` (public metadata) · `POST /api/chat/:chatbotId/messages` · `POST /api/chat/:chatbotId/messages/stream` (SSE: `meta` / `token` / `handoff` / `done` / `error`) · `POST /api/chat/:chatbotId/handoff` (submit contact form) | none; origin checked against chatbot's domain allowlist |
 | Auth | better-auth mounted routes (email+password, passkeys, sessions) · `GET /api/auth/me` (current user) · `GET /api/auth/bootstrap` (fresh-install detection → `{ hasUsers }`) · public `POST /api/auth/reset-password` doubles as the one-time completion for invited clients (agency stores a `reset-password:<token>` verification row; the accept page calls this endpoint natively) | rate-limited |
-| Dashboard API | chatbots CRUD, clients (list/create-invite/assign/reset-link/remove), conversations, leads, analytics, settings, **website import** (`POST /api/admin/import`), **draft-facts tester** (`POST /api/admin/chatbots/:id/test`), **leads** (`GET /api/admin/chatbots/:id/leads`), **per-bot activity stats** (`GET /api/admin/chatbots/:id/stats?days=30`, daily conversation/lead/message buckets + totals) | better-auth session; role-scoped queries (client sessions may read/update only assigned chatbots) |
+| Dashboard API | chatbots CRUD, clients (list/create-invite/assign/reset-link/remove), conversations, leads, analytics, settings, **website import** (`POST /api/admin/import`), **draft-facts tester** (`POST /api/admin/chatbots/:id/test`), **leads** (`GET /api/admin/chatbots/:id/leads`), **per-bot conversations** (`GET /api/admin/chatbots/:id/conversations?filter=all|leads`, `GET …/conversations/:conversationId` full thread), **per-bot activity stats** (`GET /api/admin/chatbots/:id/stats?days=30`, daily conversation/lead/message buckets + totals) | better-auth session; role-scoped queries (client sessions may read/update only assigned chatbots) |
 | Static | `/admin/*` (SPA), `/embed.js` (cacheable `public, max-age=600`) | none |
 
 Cross-cutting middleware: security headers, per-visitor + auth rate limits, request logging (pino), error envelope (consistent problem+json-style errors).
 
-**Streaming lifecycle (ported from v1, proven):**
+**Streaming lifecycle (ported from v1, hardened):**
 
 1. Load chatbot by id → 404 if missing/paused; verify request origin against allowlist.
 2. Validate content (non-empty, ≤2000 chars); rate-limit check per visitorId → 429.
-3. Resolve conversation (create if absent; verify ownership) → insert user message row.
-4. Load last 20 messages; resolve global key (settings decrypted → env fallback), model (per-bot override → Settings default; **no built-in default** — fail with `MODEL_NOT_CONFIGURED` when unset), and base URL (chatbot override → settings → env → default).
+3. Resolve conversation (create if absent; verify ownership) → fetch **last 20 messages** (DESC + reverse) *before* inserting the user row (so the visitor message is never duplicated), then insert user message row.
+4. Resolve global key (settings decrypted → env fallback), model (per-bot override → Settings default; **no built-in default** — fail with `MODEL_NOT_CONFIGURED` when unset), and base URL (chatbot override → settings → env → default).
 5. Flush SSE headers immediately → `event: meta` with ids (TTFB target <10ms).
-6. Call provider with `stream: true`; forward deltas as `event: token`; persist usage tokens.
+6. Call provider with `stream: true` over a pooled keep-alive connection; forward deltas as `event: token`; persist usage tokens. Upstream failures surface honestly: header timeout 15s, inter-chunk watchdog 60s, mid-stream `error` chunks and `finish_reason: "error"` → `event: error` frame, truncated replies are never persisted. When a visitor closes the panel/tab the upstream request is aborted (`c.req.raw.signal`) so token generation stops and billing ends.
 7. On completion persist assistant row → `event: done`. Provider errors → `event: error`.
+
+**Provider-request hardening (variance reduction):**
+
+- **Sticky caching:** every chat call carries the conversation id as an OpenAI-compatible cache key — `session_id` on OpenRouter (activates provider sticky routing from turn one), `prompt_cache_key` on direct OpenAI. Multi-turn chats stay pinned to a warm endpoint with a growing cached prefix; `cached_tokens`, `cache_write_tokens`, cost, and the serving upstream are logged per request.
+- **Routing modes** (Settings, OpenRouter): `auto` (price-weighted load balancing) · `latency` (`provider.sort: latency`) · `throughput` (`sort: throughput`) · `pin` (`only: [slug], allow_fallbacks: false`). Legacy stored pins migrate to `pin` mode automatically.
+- **Reasoning suppression with correct dialects:** OpenRouter gets `reasoning: { effort: 'none' }`; direct OpenAI reasoning models get `reasoning_effort: 'minimal'`; models that cannot disable thinking (DeepSeek R1/reasoner, Gemini-3 family, `-thinking` variants) get no parameter at all.
 
 Non-streaming `POST .../messages` retained as fallback.
 
@@ -114,6 +120,7 @@ TypeScript source compiled by Vite to a single IIFE `embed.js` (no runtime depen
 
 - Fetch public metadata → render bubble + panel; store `conversationId`/`visitorId` in localStorage per chatbot.
 - Stream tokens optimistically; quick-reply chips; proactive nudge (configurable, default off); language-matched replies; graceful degradation when server/chatbot unavailable; keyboard/ARIA accessible.
+- Streaming paints are coalesced (~50ms batches appended into a single text node) and closing the panel aborts the in-flight request.
 - Widget settings per chatbot: show logo (on/off, uploaded image or name initial), show business name (on/off), show "Online now" presence (on/off), powered-by badge (on/off). Header collapses gracefully as elements are toggled off.
 
 Must never break the host page: no globals beyond one namespace, scoped styles via Shadow DOM.
@@ -131,8 +138,9 @@ better-auth manages identity tables (users, sessions, accounts, passkeys). Appli
 | `chatbots` | name, website URL, welcome message, brand color/logo (show toggle + uploaded image), show name / "online now" toggles, model, base URL, temperature/max tokens, status (active/paused/archived), allowed domains, facts JSON (overview/hours/location/contact/services/pricing/policies/knowledge/FAQs), FAQ pairs JSON |
 | `client_assignments` | maps client users → chatbots (the ownership chain) |
 | `conversations` | per chatbot + visitorId; captured `visitor_name`/`visitor_email` (leads) |
+| `handoffs` | pending/submitted contact forms: reason, intro, fields JSON, answers JSON |
 | `messages` | role, content, token usage per row |
-| `settings` | encrypted global AI key + hint, base URL, SMTP config, branding, powered-by default |
+| `settings` | encrypted global AI key + hint, base URL, SMTP config (encrypted pass), branding, powered-by default |
 | `audit_log` | admin/client actions |
 
 SQLite pragmas and indexes port from v1 (WAL, synchronous=NORMAL, cached prepared statements, indexes on conversation/message lookups). The full schema lives in `apps/server/src/db/schema.ts` — treat it as the source of truth until a dedicated DATA_MODEL.md is written.
@@ -154,6 +162,8 @@ Host page loads <script src="https://chat.example.com/embed.js" data-chatbot-id=
 
 See §4.1 streaming lifecycle. Widget renders optimistic user bubble, streams assistant tokens with cursor, persists nothing locally beyond localStorage ids.
 
+When the model calls the `offer_handoff` tool (quote / booking / callback / talk to a person), the server validates allowlisted field types, persists a pending `handoffs` row, and emits SSE `event: handoff`. The widget renders an in-chat contact card. On submit (`POST /api/chat/:id/handoff`), answers write `visitor_name` / `visitor_email`, mark the handoff submitted, and fire-and-forget an owner email (reason + answers + last ~12 messages) via agency SMTP to assigned clients ∪ optional Also-notify address.
+
 ### 6.3 Owner edits facts
 
 Owner (role `client`) PUTs new facts via dashboard API → server verifies ownership chain → validates via shared Zod schema → updates row → prompt preview regenerates. Takes effect on next message; no restart.
@@ -167,7 +177,7 @@ Owner (role `client`) PUTs new facts via dashboard API → server verifies owner
 | Client capabilities | Clients edit own facts/settings directly | Decided in product planning; keeps clients self-sufficient |
 | Knowledge | Structured facts + FAQ pairs in system prompt; no RAG | Predictable, honest, zero infra; the product promise |
 | Human escalation | Prompt-level (surface contact info, offer follow-up) | Local businesses mostly need calls; live inbox is a different product |
-| Notifications | Email only (SMTP) for v1 | The money moment; webhooks deferred |
+| Notifications | In-chat `offer_handoff` form → SMTP email to owners (reason + answers + transcript) | The money moment; webhooks deferred |
 | White-label | Free and core | The market wedge |
 | Deployment | Self-host Docker only | Decided; PaaS templates deferred |
 

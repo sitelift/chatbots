@@ -72,7 +72,7 @@ The agency dashboard and owner portal are **one application with role-based scop
 | --- | --- |
 | Edit own business facts, welcome message, appearance + in-editor Test preview | Decided: clients edit directly, no approval queue |
 | Chat history, lead list, CSV export | Table stakes |
-| Instant email notification when a lead is captured | SMTP configured by the agency; email-only for v1 |
+| Instant email notification when a lead is captured | Agency SMTP; in-chat handoff form submit triggers mail to assigned owners (+ optional Also notify) |
 | Stats view: conversations/leads trend, popular questions | Owners must *see* ROI or they churn |
 
 ### 5.4 Widget
@@ -103,7 +103,8 @@ v1.0 ships when all of these are true:
 
 - [ ] An agency can go from `docker compose up -d` to a live chatbot on a client site in under an hour, following only the README
 - [ ] A client account can edit their facts, read history, and see stats — and can touch nothing else
-- [ ] Lead capture triggers an email; analytics show trends, top questions, gaps, and token spend
+- [x] Lead capture triggers an email *(handoff form + SMTP; analytics trends/gaps/token spend still open)*
+- [ ] Analytics show trends, top questions, gaps, and token spend
 - [ ] Widget matches brand colors, streams replies, works on mobile, passes keyboard/ARIA checks
 - [ ] Removing SiteLift branding requires zero code changes
 - [ ] All surfaces pass the style bar (principle 1) — reviewed as a release gate, not an afterthought

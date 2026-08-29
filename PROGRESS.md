@@ -3,11 +3,9 @@
 > **Living document.** Update this at every stable point so any session/device can pick up cold.
 > Read [`AGENTS.md`](AGENTS.md) (working rules) and [`docs/PRODUCT.md`](docs/PRODUCT.md) (scope contract) first.
 >
-> **Last updated:** client-portal polish rounds 1–4 committed and pushed. Round 4: empty-domain
-> guardrails (DomainsList warning callout + active-bot status warning; note empty allowlist means
-> "answers from any website" server-side) and relative lead timestamps. Rounds 1–3 covered preview
-> banner fix, role-aware copy, live stats, a11y rows, session dedupe, discard dialog, invite flow.
-> Next up: keep refining, then lead-capture emails.
+> **Last updated:** per-bot Inbox — conversation list + full-thread reader (All/Leads filter),
+> responsive grouped-bar activity chart. Next up: cross-bot inbox + deeper analytics
+> (top questions / knowledge gaps / token spend).
 
 ---
 
@@ -17,10 +15,72 @@
 | --- | --- |
 | **Product** | Open-source, self-hosted AI chatbot platform for web agencies. One Docker container, unlimited client chatbots, agency-branded, BYO OpenAI-compatible key. |
 | **Stack** | TypeScript strict · pnpm monorepo · Hono + Drizzle + SQLite (server) · React 19 + Vite + Tailwind v4 + TanStack Router/Query (dashboard) · dependency-free Shadow-DOM widget · better-auth · Biome/Vitest/GitHub Actions |
-| **Tests** | 134 passing (76 server · 58 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
+| **Tests** | 158 passing (98 server · 60 dashboard) — gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` before every commit |
 | **Runs on** | Server `:3000` (`pnpm dev`) · Dashboard `:5173` (`pnpm dev:dashboard`, proxies API) |
 
 ## What works today (expand per area)
+
+<details>
+<summary><strong>Per-bot Inbox + conversation browser (DONE)</strong></summary>
+
+- Tab renamed **Leads → Inbox** on the chatbot editor (agency + client scoped).
+- **Activity card:** daily grouped bars (conversations + leads) built from CSS flex — fluid at any
+  card width (the old fixed-viewBox SVG letterboxed itself into the middle ~65%), integer y-axis
+  ticks with one step of headroom, hairline stubs on zero days, column hover highlight + tooltip;
+  four stat tiles kept.
+- **Master–detail inbox:** `All` / `Leads` filter pills; lead rows get a monochrome Lead pill;
+  selecting a row loads the full transcript (chat bubbles). Mobile swaps list ↔ detail.
+- **API:** `GET /api/admin/chatbots/:id/conversations?filter=all|leads` and
+  `GET …/conversations/:conversationId` (role-scoped). Legacy `/leads` still works (wraps filter=leads).
+- Cross-bot / global agency inbox still deferred.
+</details>
+
+<details>
+<summary><strong>In-chat handoff form + owner email (DONE)</strong></summary>
+
+- **Tool protocol:** chat requests attach OpenAI-compatible `offer_handoff` tool; streamed tool-call
+  deltas assemble into validated args (allowlisted field types, email always required).
+- **SSE `handoff` event** after a pending `handoffs` row is created; widget renders an in-chat
+  contact card (branded submit). Submit → `POST /api/chat/:id/handoff` writes lead fields, emails
+  owners async, confirmation state in-widget.
+- **Owner email:** reason (model summary at handoff time) + labeled answers + last ~12 messages +
+  deep link. Recipients = assigned client emails ∪ Settings **Also notify**.
+- **SMTP:** agency Settings section (host/port/TLS/user/encrypted pass/from/also-notify) + Send
+  test email. Nodemailer transport; injectable in tests.
+- **Test tab / WidgetSim** surface preview handoff cards from the admin test endpoint
+  (`completeWithTools`). Leads inbox shows handoff reason when present.
+- Guardrail: when visitors want a quote/booking/callback, call the tool instead of asking for email
+  in free text.
+</details>
+
+<details>
+<summary><strong>Latency & resilience round — provider hardening (DONE)</strong></summary>
+
+- **Context-window fix:** `getHistory` now takes the *last* 20 messages (DESC + reverse); history is
+  fetched *before* inserting the user row so the visitor message can never be duplicated in context.
+- **Upstream honesty:** mid-stream provider errors (OpenRouter top-level `error` chunk,
+  `finish_reason: "error"`) now emit an `error` SSE frame; partial replies are never persisted.
+- **Deadlines:** 15s header timeout + 60s inter-chunk watchdog on the streaming fetch; one
+  transport-level connect retry before headers. Visitor closing the panel/tab aborts the upstream
+  request (`c.req.raw.signal` → `AbortController`), stopping token generation/billing.
+- **Sticky caching:** conversation id sent as `session_id` (OpenRouter) / `prompt_cache_key`
+  (OpenAI direct) → provider sticky routing + growing cached prefix = compounding TTFT wins.
+- **Routing modes** replace the raw provider pin in Settings: auto · latency · throughput · pin
+  (legacy stored pins resolve to `pin`). Modes apply to OpenRouter traffic only.
+- **Reasoning suppression per dialect:** OpenRouter `reasoning:{effort:'none'}`; OpenAI direct
+  `reasoning_effort:'minimal'` on o*/gpt-5* only; thinking-locked models (deepseek-r1/reasoner,
+  gemini-3*, qwq, *-thinking) get no parameter. Replaces the old global `noReasoning` flag.
+- **Keep-alive pooling:** all provider calls go through a shared undici Agent (55s idle timeout)
+  instead of the cold-fetch default (~4s), removing TCP+TLS setup from most requests.
+- **Telemetry:** pino logs now include which upstream served, ttftMs/ttfbMs, prompt/completion/
+  **cached/cache-write tokens**, and cost. Operator-facing stats UI still to come.
+- **Widget:** closing the panel aborts the request; tokens are painted in ~50ms coalesced batches
+  via a single growing text node with throttled scroll; mid-stream errors keep the partial reply
+  and append an inline note instead of wiping the bubble.
+- **Tests:** new coverage for last-N context, mid-stream error frames, routing/suppression/session
+  body shapes, settings API for routing modes. Gotcha fixed while here: root `.env` vars leaked into
+  tests through module re-evaluation — env loading is now once-per-process.
+</details>
 
 <details>
 <summary><strong>Milestone 0 — foundation (DONE)</strong></summary>
@@ -167,7 +227,7 @@
 - **Activity stats on the Leads tab** (above the inbox): new `GET /api/admin/chatbots/:id/stats?days=30`
   buckets conversations/leads/messages per local day (7–90 window, clamped); shared
   `chatbotStatsSchema`. Dashboard renders an `ActivityCard` (dependency-free CSS bars —
-  conversations in muted gray, leads in ink; hover tooltips; sparse x labels) plus four stat tiles
+  conversations in `chart-1`, leads in `chart-2`; hover tooltips; sparse x labels) plus four stat tiles
   (conversations · leads · lead rate · msgs/conversation). Skeleton loading, teaching empty state,
   and silent-hide if stats fetch fails (inbox never breaks because of it).
 - **Editor taste/copy pass**: unified `StatusBadge` component (dot + tint) across list + editor;
@@ -369,14 +429,12 @@
 
 ## Roadmap — what to build next (in order)
 
-1. **Lead-capture emails** — SMTP settings surface, `nodemailer`, trigger when visitor name/email
-   captured (detect in chat route), digest option later. The editor's Leads tab already lists
-   captured leads; the email notification is the missing push. (Client accounts + portal are DONE:
-   invites via copyable setup links, assignment, owner-scoped UI, preview mode + polish rounds.)
-3. **Conversations browser + analytics** — per-bot thread view, leads inbox, trends/top-questions/
-   knowledge-gaps cards; token spend from stored usage columns.
-4. **White-label polish** — agency branding tokens, powered-by default toggle wiring.
-5. **E2E tests** — Playwright: install→wizard→create→chat happy path; then CI publish workflow.
+1. **Cross-bot inbox + deeper analytics** — agency-wide thread browser; trends/top-questions/
+   knowledge-gaps cards; token spend from stored usage columns. (Per-bot Inbox + handoff emails
+   are DONE.)
+2. **White-label polish** — agency branding tokens, powered-by default toggle wiring.
+3. **E2E tests** — Playwright: install→wizard→create→chat→handoff happy path; then CI publish workflow.
+4. **CSV export** for leads.
 
 ## Environment & commands
 
@@ -431,6 +489,9 @@ seeded — fresh installs start with a blank chatbot list.
 ## Commit trail (this rebuild)
 
 ```
+0f1e500 feat: per-bot Inbox, activity chart, and Settings for routing/SMTP
+e0140e3 feat: provider hardening, in-chat handoff, and SMTP lead mail
+6cab31c docs: PROGRESS.md — round 4 snapshot (domain guardrails, relative lead timestamps), tests 134
 166d238 style: biome formatting
 a8f92cc design: leads inbox reads like an inbox — relative timestamps (reltime.ts) with short-date fallback + hover datetime
 194a45b feat: empty-domain guardrails — DomainsList warning callout + active-bot status warning when no domains configured

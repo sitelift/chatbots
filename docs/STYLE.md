@@ -17,7 +17,7 @@ Token values live in [`apps/dashboard/src/styles/globals.css`](../apps/dashboard
 
 ## 2. The DNA — rules that never bend
 
-1. **Monochrome, always.** SiteLift's own surfaces use no accent color — ink on paper: near-black primary in light mode, near-white in dark mode, grayscale everywhere else. The only permitted hues are **semantic** (success / destructive / warning) because they carry meaning, never decoration. The client-facing widget may adopt the *client's* brand color as a reseller feature, and defaults to ink when none is set.
+1. **Monochrome chrome.** SiteLift's own UI chrome uses no accent color — ink on paper: near-black primary in light mode, near-white in dark mode, grayscale everywhere else. The only permitted hues outside charts are **semantic** (success / destructive / warning). **Analytics charts** may use `chart-1…5` series colors so series are legible. The client-facing widget may adopt the *client's* brand color as a reseller feature, and defaults to ink when none is set.
 2. **Typography does the work.** Hierarchy comes from size and weight — never from boxes, dividers, or color fills.
 3. **Motion ≤200ms in the dashboard.** Ease-out, opacity/transform only. The widget bubble is the one springy exception.
 4. **Borders over shadows.** Flat surfaces; elevation = border + subtle fill. Shadows exist at two levels max.
@@ -35,7 +35,7 @@ Base: pure zinc neutrals (OKLCH), zero chroma outside semantic states. Primary i
 | Ink (primary) | `primary` / `primary-foreground` | Primary buttons, active nav, focus ring. It is *emphasis through contrast*, not color |
 | Subtle surfaces | `muted` / `muted-foreground` | Secondary text, hover fills, skeletons, metadata |
 | Semantic | `success` · `warning` · `destructive` | Status only: lead captured, paused bot, delete actions |
-| Charts | `chart-1…5` | Grayscale ramp, fixed order — series are separated by lightness, never hue |
+| Charts | `chart-1…5` | Series colors for analytics (blue / green / amber…). UI chrome stays monochrome; charts are the one place hue carries series meaning. |
 | Lines | `border` / `input` | All borders and input strokes |
 
 Rules:
