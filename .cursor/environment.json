@@ -1,0 +1,20 @@
+{
+  "name": "SiteLift",
+  "install": "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @sitelift/widget build",
+  "terminals": [
+    {
+      "name": "server",
+      "command": "pnpm dev",
+      "description": "Hono API server on :3000 (serves /api, /health, /embed.js, and /admin in prod)."
+    },
+    {
+      "name": "dashboard",
+      "command": "pnpm dev:dashboard",
+      "description": "Vite dashboard dev server on :5173 (proxies /api, /health, /embed.js to the server)."
+    }
+  ],
+  "ports": [
+    { "name": "api", "port": 3000 },
+    { "name": "dashboard", "port": 5173 }
+  ]
+}
